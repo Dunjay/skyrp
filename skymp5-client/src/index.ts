@@ -48,7 +48,7 @@ import { AuthService } from "./services/services/authService";
 // Frostfall's contracts.
 // import { CharacterSelectService } from "./services/services/characterSelectService";
 // import { RestraintService } from "./services/services/restraintService";
-// import { HousingService } from "./services/services/housingService";
+import { HousingService } from "./services/services/housingService";
 // import { FactionService } from "./services/services/factionService";
 import { NetInfoService } from "./services/services/netInfoService";
 import { AnimDebugService } from "./services/services/animDebugService";
@@ -115,7 +115,9 @@ const main = () => {
       new BrowserService(sp, controller),
       new AuthService(sp, controller),
       // Frostfall-incompatible roleplay services intentionally not registered
-      // (see import block above).
+      // (see import block above). HousingService is rewired to drive Frostfall's
+      // /property chat commands, so it's enabled.
+      new HousingService(sp, controller),
       new NetInfoService(sp, controller),
       new AnimDebugService(sp, controller),
       new TimersService(sp, controller),
