@@ -50,6 +50,7 @@ import { AuthService } from "./services/services/authService";
 // import { RestraintService } from "./services/services/restraintService";
 import { HousingService } from "./services/services/housingService";
 import { PlayerActionService } from "./services/services/playerActionService";
+import { PersonalMenuService } from "./services/services/personalMenuService";
 // import { FactionService } from "./services/services/factionService";
 import { NetInfoService } from "./services/services/netInfoService";
 import { AnimDebugService } from "./services/services/animDebugService";
@@ -120,6 +121,7 @@ const main = () => {
       // /property chat commands, so it's enabled.
       new HousingService(sp, controller),
       new PlayerActionService(sp, controller),
+      new PersonalMenuService(sp, controller),
       new NetInfoService(sp, controller),
       new AnimDebugService(sp, controller),
       new TimersService(sp, controller),
