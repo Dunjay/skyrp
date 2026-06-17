@@ -15,16 +15,14 @@ export interface ChatChannel {
   className: string;
 }
 
-// The default channel is "say" (first entry). Order here is the render order.
-// Commands match the Frostfall gamemode's chat channels (/me, /ooc, /f).
 export const CHAT_CHANNELS: ChatChannel[] = [
-  { id: 'say', label: 'Say', cmd: '', className: 'channel-say' },
-  { id: 'ooc', label: 'OOC', cmd: '/ooc ', className: 'channel-looc' },
-  { id: 'me', label: 'Me', cmd: '/me ', className: 'channel-me' },
-  { id: 'faction', label: 'Faction', cmd: '/f ', className: 'channel-admin' },
+  { id: 'local',    label: 'Local',    cmd: '',          className: 'channel-local' },
+  { id: 'global',   label: 'Global',   cmd: '/ooc ',     className: 'channel-global' },
+  { id: 'admin',    label: 'Admin',    cmd: '/admin ',   className: 'channel-admin' },
+  { id: 'personal', label: 'Personal', cmd: '/pm ',      className: 'channel-pm' },
 ];
 
-export const DEFAULT_CHANNEL = CHAT_CHANNELS[0].id;
+export const DEFAULT_CHANNEL = CHAT_CHANNELS[0].id; // 'local'
 
 // Applies the active channel's prefix to a message. If the player typed an
 // explicit slash-command we respect it and add no prefix, so manual commands
@@ -40,21 +38,25 @@ export const applyChannel = (text: string, channelId: string): string => {
 const Channels = (props: {
   active: string,
   onSelect: (id: string) => void,
+  unread?: Record<string, boolean>,
 }) => {
   return (
     <div className="chat-channels">
-      {CHAT_CHANNELS.map((channel) => (
-        <button
-          key={channel.id}
-          type="button"
-          // Keep the chat input focused when switching channels.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => props.onSelect(channel.id)}
-          className={`chat-channel ${channel.className} ${props.active === channel.id ? 'active' : ''}`}
-        >
-          {channel.label}
-        </button>
-      ))}
+      {CHAT_CHANNELS
+        .filter((channel) => channel.id !== 'admin' || (window as any).__skyrpAdmin)
+        .map((channel) => (
+          <button
+            key={channel.id}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => props.onSelect(channel.id)}
+            className={`chat-channel ${channel.className} ${props.active === channel.id ? 'active' : ''}`}
+          >
+            {channel.label}
+            {props.unread && props.unread[channel.id] && props.active !== channel.id
+              ? <span className="chat-channel-unread" /> : null}
+          </button>
+        ))}
     </div>
   );
 };

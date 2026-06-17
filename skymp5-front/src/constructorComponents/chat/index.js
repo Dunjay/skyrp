@@ -55,6 +55,13 @@ const Chat = (props) => {
   const currentMessageInHistory = useRef(-1);
 
   const writtenMessage = useRef('');
+  
+  const hasUnreadPersonal = window.chatMessages.some((m) => m.channel === 'personal' && !m.read);
+	useEffect(() => {
+	  if (channel === 'personal') {
+		window.chatMessages.forEach((m) => { if (m.channel === 'personal') m.read = true; });
+	  }
+	}, [channel, props.messages]);
 
   const handleScroll = () => {
     if (chatRef.current) {
@@ -193,20 +200,20 @@ const Chat = (props) => {
   };
 
   const getList = () => {
-    return window.chatMessages.map((msg, index) => {
-      const result = getMessageSpans(msg);
-      return (
-        <div
-          className={`msg ${result[1] ? 'nonrp' : ''}`}
-          key={`msg-${index}`}
-          style={{ marginLeft: '10px', opacity: msg.opacity }}
-        >
-          {
-            result[0]
-          }
-        </div>
-      );
-    });
+    return window.chatMessages
+      .filter((msg) => msg.channel === 'all' || (msg.channel || 'local') === channel)
+      .map((msg, index) => {
+        const result = getMessageSpans(msg);
+        return (
+          <div
+            className={`msg ${result[1] ? 'nonrp' : ''}`}
+            key={`msg-${index}`}
+            style={{ marginLeft: '10px', opacity: msg.opacity }}
+          >
+            {result[0]}
+          </div>
+        );
+      });
   };
   return (
     <div className='fullPage'>
@@ -225,7 +232,7 @@ const Chat = (props) => {
                    <img src={ChatCorner} />
                  </div>
               }
-              resizeHandles={['nw']}
+              resizeHandles={['sw']}
               className={`list ${hideNonRP ? 'hideNonRP' : ''}`}
               id='handle'
             >
@@ -245,13 +252,14 @@ const Chat = (props) => {
                 display: isInputHidden ? 'none' : 'block'
               }}
             >
-              <Channels
-                active={channel}
-                onSelect={(id) => {
-                  setChannel(id);
-                  if (inputRef.current) inputRef.current.focus();
-                }}
-              />
+			  <Channels
+			    active={channel}
+			    unread={{ personal: hasUnreadPersonal }}
+			    onSelect={(id) => {
+				  setChannel(id);
+				  if (inputRef.current) inputRef.current.focus();
+			    }}
+			  />
               <div className='chat-input'>
                 <ChatInput
                   id="chatInput"
