@@ -51,6 +51,7 @@ import { AuthService } from "./services/services/authService";
 import { HousingService } from "./services/services/housingService";
 import { PlayerActionService } from "./services/services/playerActionService";
 import { PersonalMenuService } from "./services/services/personalMenuService";
+import { ChatService } from "./services/services/chatService";
 // import { FactionService } from "./services/services/factionService";
 import { NetInfoService } from "./services/services/netInfoService";
 import { AnimDebugService } from "./services/services/animDebugService";
@@ -128,6 +129,7 @@ const main = () => {
       new PlayerBowShotService(sp, controller),
       new GamemodeEventSourceService(sp, controller),
       new GamemodeUpdateService(sp, controller),
+      new ChatService(sp, controller),
       new FrontHotReloadService(sp, controller),
       new BlockedAnimationsService(sp, controller),
       new WorldView(sp, controller),

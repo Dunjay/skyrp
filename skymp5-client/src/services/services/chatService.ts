@@ -1,143 +1,101 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
-import { ConnectionMessage } from "../events/connectionMessage";
-import { CustomPacketMessage } from "../messages/customPacketMessage";
-import { CreateActorMessage } from "../messages/createActorMessage";
-import { MsgType } from "../../messages";
-import { FunctionInfo } from "../../lib/functionInfo";
 import { logTrace } from "../../logging";
 
-// for the browser-side bootstrap (executed inside the CEF browser)
+// for the browser-side mount/append code (executed inside the CEF browser)
 declare const window: any;
 
+// Frostfall delivers chat by setting this owner-visible property to a
+// '#{rrggbb}text…' string. Its updateOwner script (which mounts the widget and
+// renders messages) is signed and can be rejected by ServerJsVerificationService
+// when the server's publicKeys don't match — silently killing chat. We bypass
+// that by reading the property VALUE directly (it syncs regardless) and
+// rendering it ourselves.
+const CHAT_MSG_PROP = 'ff_chatMsg';
+
+// Browser-side bootstrap: mount a chat widget (unless one already exists — e.g.
+// Frostfall's own updateOwner mounted it, in which case we defer) and define a
+// '#{color}'-parsing appender. window.mp.send('cef::chat:send', …) is exactly
+// how Frostfall's own chat widget sends, so input still reaches the gamemode.
+const CHAT_MOUNT_JS = `(function(){
+  try {
+    if (window.__skyrpChatReady) return;
+    if (!window.skyrimPlatform || !window.skyrimPlatform.widgets) return;
+    window.__skyrpChatReady = true;
+    if (!window.chatMessages) window.chatMessages = [];
+    var sf = function(t){ if (window.mp && typeof window.mp.send === 'function') window.mp.send('cef::chat:send', t); };
+    var chatWidget = { type:'chat', id:'chat', isInputHidden:false, placeholder:'', messages: window.chatMessages.slice(), send: sf };
+    window.__skyrpChatWidget = chatWidget;
+    var cur = window.skyrimPlatform.widgets.get() || [];
+    if (cur.some(function(w){ return w.type==='chat'; })) {
+      window.__skyrpChatOwns = false; // someone (Frostfall) already owns chat
+    } else {
+      window.__skyrpChatOwns = true;
+      window.skyrimPlatform.widgets.set([chatWidget].concat(cur));
+    }
+    window.__skyrpAddChat = function(raw){
+      try {
+        if (!window.__skyrpChatOwns) return;
+        var parts = String(raw).split('#{'); var segs = []; var col = '#fafafa';
+        for (var i=0;i<parts.length;i++){ var p = parts[i];
+          if (i===0){ if(p) segs.push({text:p,color:col,opacity:1,type:['default']}); continue; }
+          var ci = p.indexOf('}');
+          if (ci===6){ col = '#'+p.slice(0,6); var txt = p.slice(7); if(txt) segs.push({text:txt,color:col,opacity:1,type:['default']}); }
+          else { segs.push({text:'#{'+p,color:col,opacity:1,type:['default']}); }
+        }
+        if (!segs.length) return;
+        window.chatMessages.push({text:segs, category:'plain', opacity:1});
+        if (window.chatMessages.length > 100) window.chatMessages.shift();
+        var w = window.skyrimPlatform.widgets.get() || [];
+        var found = false;
+        var next = w.map(function(x){ if (x.type!=='chat') return x; found = true; return Object.assign({}, x, {messages: window.chatMessages.slice()}); });
+        if (!found) next = w.concat([Object.assign({}, window.__skyrpChatWidget, {messages: window.chatMessages.slice()})]);
+        window.skyrimPlatform.widgets.set(next);
+        if (typeof window.scrollToLastMessage === 'function') window.scrollToLastMessage();
+      } catch (e) {}
+    };
+  } catch (e) {}
+})();`;
+
 /**
- * Brings up the in-game chat widget on the client and bridges it to the server.
+ * Makes the Frostfall chat work on the stock client without relying on the
+ * gamemode's signed updateOwner script. It mounts the chat widget on spawn and,
+ * each tick, reads the owner actor's `ff_chatMsg` property straight from the
+ * synced model (the same place GamemodeUpdateService reads it) and renders any
+ * new value. Sending goes out via `cef::chat:send`, which Frostfall handles.
  *
- * In skymp the chat widget is normally created by the gamemode's browser
- * property system; a minimal gamemode.js can't easily do that, so the client
- * creates it here and talks to the server with simple custom packets. The
- * gamemode only has to receive a message and broadcast it back to the people
- * who should see it.
- *
- * Protocol — both are {@link MsgType.CustomPacket} with a JSON dump:
- *
- *   Client -> Server, the player sent chat (raw text, may carry a channel
- *   prefix such as "/looc ..." from the chat channel selector):
- *     { "customPacketType": "chatMessage", "text": "/looc hello" }
- *
- *   Server -> Client, a message to display (broadcast to the right people):
- *     { "customPacketType": "chatMessage",
- *       "name": "Lydia",          // optional sender prefix
- *       "text": "hello there",
- *       "color": "#ffffff",       // optional body colour
- *       "category": "rp" }        // "plain" => hidden by the non-rp filter
- *
- * The widget itself (top-left, draggable, resizable) lives in skymp5-front;
- * this service only instantiates it and pumps messages in/out.
+ * Registered after GamemodeUpdateService, so if Frostfall's own chat script DOES
+ * verify and run, it mounts first and this service defers to it.
  */
 export class ChatService extends ClientListener {
   constructor(private sp: Sp, private controller: CombinedController) {
     super();
-    this.controller.on("browserMessage", (e) => this.onBrowserMessage(e));
-    this.controller.emitter.on("customPacketMessage", (e) => this.onCustomPacketMessage(e));
-    this.controller.emitter.on("createActorMessage", (e) => this.onCreateActorMessage(e));
+    this.controller.on("update", () => this.onUpdate());
   }
 
-  private onCreateActorMessage(event: ConnectionMessage<CreateActorMessage>): void {
-    // Our own actor spawned. Bring up the chat on the next update tick — a safe
-    // context for native calls (Utility.wait / executeJavaScript throw if called
-    // straight from this event), and it runs after AuthService clears the login
-    // widgets on this same event.
-    if (event.message.isMe) {
-      this.controller.once("update", () => this.ensureChat());
+  private onUpdate(): void {
+    // ownerModel is populated by GamemodeUpdateService once our actor spawns.
+    if (this.sp.storage["ownerModelSet"] !== true) {
+      return;
+    }
+    const owner = this.sp.storage["ownerModel"] as Record<string, unknown> | undefined;
+    if (!owner) {
+      return;
+    }
+
+    if (!this.mounted) {
+      this.mounted = true;
+      logTrace(this, "Mounting chat widget (reads ff_chatMsg directly)");
+      this.sp.browser.executeJavaScript(CHAT_MOUNT_JS);
+      this.sp.browser.setVisible(true);
+    }
+
+    const msg = owner[CHAT_MSG_PROP];
+    if (typeof msg === "string" && msg !== "" && msg !== this.lastMsg) {
+      this.lastMsg = msg;
+      this.sp.browser.executeJavaScript(`window.__skyrpAddChat && window.__skyrpAddChat(${JSON.stringify(msg)});`);
     }
   }
 
-  private ensureChat(): void {
-    if (this.chatSetup) {
-      return;
-    }
-    this.chatSetup = true;
-    logTrace(this, `Bootstrapping chat widget`);
-    this.sp.browser.executeJavaScript(new FunctionInfo(this.chatBootstrap).getText());
-    this.sp.browser.setVisible(true);
-  }
-
-  private onBrowserMessage(e: { arguments: unknown[] }): void {
-    if (e.arguments[0] !== "chat:send") {
-      return;
-    }
-    const text = e.arguments[1];
-    if (typeof text !== "string" || text.trim() === "") {
-      return;
-    }
-    const message: CustomPacketMessage = {
-      t: MsgType.CustomPacket,
-      contentJsonDump: JSON.stringify({ customPacketType: "chatMessage", text }),
-    };
-    this.controller.emitter.emit("sendMessage", { message, reliability: "reliable" });
-  }
-
-  private onCustomPacketMessage(event: ConnectionMessage<CustomPacketMessage>): void {
-    let content: Record<string, unknown> = {};
-    try {
-      content = JSON.parse(event.message.contentJsonDump);
-    } catch (e) {
-      return;
-    }
-    if (content["customPacketType"] !== "chatMessage") {
-      return;
-    }
-    // Make sure the widget exists (e.g. a message arrives before our spawn hook).
-    this.ensureChat();
-    const payload = JSON.stringify({
-      name: typeof content["name"] === "string" ? content["name"] : "",
-      text: typeof content["text"] === "string" ? content["text"] : "",
-      color: typeof content["color"] === "string" ? content["color"] : "#ffffff",
-      category: content["category"] === "plain" ? "plain" : "rp",
-    });
-    this.sp.browser.executeJavaScript(`window.__skyrpAddChat && window.__skyrpAddChat(${payload});`);
-  }
-
-  // Runs inside the CEF browser. Creates the chat widget and a global to append
-  // messages. Keeps the chat at index 0 so its React key stays stable (the
-  // input text isn't lost when other widgets/menus come and go).
-  private chatBootstrap = () => {
-    if (!window.skyrimPlatform || !window.skyrimPlatform.widgets || window.__skyrpChatReady) {
-      return;
-    }
-    window.__skyrpChatReady = true;
-    window.chatMessages = window.chatMessages || [];
-
-    var chatWidget = {
-      type: 'chat',
-      id: 'chat',
-      isInputHidden: false,
-      placeholder: '',
-      messages: window.chatMessages,
-      send: function (text: string) { window.skyrimPlatform.sendMessage('chat:send', text); },
-    };
-
-    var render = function () {
-      var others = (window.skyrimPlatform.widgets.get() || []).filter(function (w: any) { return w.id !== 'chat'; });
-      // New array ref for messages so the Chat component re-renders + scrolls.
-      chatWidget.messages = window.chatMessages.slice();
-      window.skyrimPlatform.widgets.set([chatWidget].concat(others));
-    };
-
-    window.__skyrpAddChat = function (msg: any) {
-      var spans = [];
-      if (msg.name) {
-        spans.push({ text: msg.name + ': ', color: '#cccccc', opacity: 1, type: ['sender'] });
-      }
-      spans.push({ text: msg.text || '', color: msg.color || '#ffffff', opacity: 1, type: msg.category === 'plain' ? ['nonrp'] : [] });
-      window.chatMessages.push({ category: msg.category || 'rp', text: spans, opacity: 1 });
-      if (window.chatMessages.length > 200) { window.chatMessages.shift(); }
-      render();
-      if (window.scrollToLastMessage) { window.scrollToLastMessage(); }
-    };
-
-    render();
-  };
-
-  private chatSetup = false;
+  private mounted = false;
+  private lastMsg: string | null = null;
 }
