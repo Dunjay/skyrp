@@ -8,7 +8,7 @@ import ChatCorner from '../../img/chat_corner.svg';
 import Settings from './settings';
 import SendButton from './sendButton';
 import ChatInput from './input';
-import Channels, { DEFAULT_CHANNEL, applyChannel } from './channels';
+import Channels, { DEFAULT_CHANNEL, applyChannel, channelForMessage } from './channels';
 import { replaceIfMoreThan20 } from '../../utils/replaceIfMoreThan20';
 
 import './styles.scss';
@@ -28,7 +28,6 @@ const Chat = (props) => {
   const [disableDiceSounds, setDisableDiceSounds] = useState(false);
   const [disableDiceColors, setDisableDiceColors] = useState(false);
   const [isPouchOpened, setPouchOpened] = useState(0);
-  const [moveChat, setMoveChat] = useState(false);
   const [showSendButton, setSendButtonShow] = useState(false);
   const [isSettingsOpened, setSettingsOpened] = useState(false);
   const [channel, setChannel] = useState(DEFAULT_CHANNEL);
@@ -95,8 +94,12 @@ const Chat = (props) => {
     if (text !== '' && text.length <= MAX_LENGTH && isReset.current && shoutLen <= MAX_SHOUT_LENGTH && (shoutLen === 0 || shoutReset.current)) {
       if (send !== undefined) {
         const message = replaceIfMoreThan20(text.trim(), '\n', '', MAX_LINES);
-        send(applyChannel(message, channel));
+        const applied = applyChannel(message, channel);
+        send(applied);
         addMessageToHistory(message);
+        // Follow the message into its tab (e.g. "/ooc hi" -> Global). 
+        const target = channelForMessage(applied);
+        if (target) setChannel(target);
       }
       isReset.current = false;
       updateInput('');
@@ -200,9 +203,12 @@ const Chat = (props) => {
   };
 
   const getList = () => {
-    return window.chatMessages
-      .filter((msg) => msg.channel === 'all' || (msg.channel || 'local') === channel)
-      .map((msg, index) => {
+    // Show only the active tab's messages; 'all' (server /system) shows everywhere.
+    // Messages without a channel (legacy) fall back to Local.
+    return window.chatMessages.filter((msg) => {
+      const ch = msg.channel || 'local';
+      return ch === channel || ch === 'all';
+    }).map((msg, index) => {
         const result = getMessageSpans(msg);
         return (
           <div
@@ -232,7 +238,7 @@ const Chat = (props) => {
                    <img src={ChatCorner} />
                  </div>
               }
-              resizeHandles={['sw']}
+              resizeHandles={['ne']}
               className={`list ${hideNonRP ? 'hideNonRP' : ''}`}
               id='handle'
             >
@@ -285,29 +291,12 @@ const Chat = (props) => {
               </div>
               <div className='chat-checkboxes'>
                 <ChatCheckbox
-                  id={'nonrp'}
-                  text={'non-rp'}
-                  isChecked={hideNonRP}
-                  onChange={(e) => {
-                    inputRef.current.focus();
-                    changeNonRPHide(e.target.checked);
-                  }} />
-                <ChatCheckbox
                   id={'settings'}
                   text={'settings'}
                   isChecked={isSettingsOpened}
                   onChange={(e) => {
                     inputRef.current.focus();
                     setSettingsOpened(e.target.checked);
-                  }} />
-                {/* Maybe we will need it later: <ChatCheckbox id={'diceColor'} text={'dice colors'} isChecked={!disableDiceColors} onChange={(e) => setDisableDiceColors(!e.target.checked)} /> */}
-                <ChatCheckbox
-                  id={'moveChat'}
-                  text={'move chat'}
-                  isChecked={moveChat}
-                  onChange={(e) => {
-                    inputRef.current.focus();
-                    setMoveChat(e.target.checked);
                   }} />
                 { doesIncludeShout &&
                   <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>

@@ -24,6 +24,15 @@ export const CHAT_CHANNELS: ChatChannel[] = [
 
 export const DEFAULT_CHANNEL = CHAT_CHANNELS[0].id; // 'local'
 
+// Switches you to the channel you're speaking on
+const COMMAND_TO_CHANNEL: Record<string, string> = {
+  say: 'local',     me: 'local',       my: 'local',       do: 'local',        looc: 'local', b: 'local',
+  yell: 'local',    shout: 'local',    y: 'local',        whisper: 'local',   w: 'local',
+  ooc: 'global',    f: 'global',       faction: 'global',
+  admin: 'admin',   system: 'admin',
+  pm: 'personal',   dm: 'personal',    to: 'personal',    too: 'personal',
+};
+
 // Applies the active channel's prefix to a message. If the player typed an
 // explicit slash-command we respect it and add no prefix, so manual commands
 // like "/me waves" or "/roll" keep working regardless of the selected channel.
@@ -33,6 +42,15 @@ export const applyChannel = (text: string, channelId: string): string => {
   }
   const channel = CHAT_CHANNELS.find((c) => c.id === channelId);
   return channel && channel.cmd ? channel.cmd + text : text;
+};
+
+// Which tab an outgoing message lands in, so the active tab can follow it.
+// Unknown / non-chat commands (e.g. /roll) keep you on your current tab.
+export const channelForMessage = (text: string): string | null => {
+  if (!text || text.charAt(0) !== '/') return 'local';
+  const i = text.indexOf(' ');
+  const cmd = (i < 0 ? text : text.slice(0, i)).slice(1).toLowerCase();
+  return COMMAND_TO_CHANNEL[cmd] ?? null;
 };
 
 const Channels = (props: {

@@ -15,7 +15,7 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
     window.__skyrpAdmin = ${isAdmin ? 'true' : 'false'};
     if (!window.chatMessages) window.chatMessages = [];
 
-    // Force the chat to the upper-left corner (#3).
+    // Force the chat to the upper-left corner.
     if (!document.getElementById('skyrpChatCss')) {
       var st = document.createElement('style');
       st.id = 'skyrpChatCss';
@@ -57,7 +57,7 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
         var cmd=(i<0?text:text.slice(0,i)).slice(1).toLowerCase();
         body=(i<0?'':text.slice(i+1)).trim();
         kind=ALIAS[cmd]||cmd;
-        if (!COLORS[kind]){ kind='say'; body=text; } // unknown -> say verbatim
+        if (!COLORS[kind]){ return { command:true }; }
       }
       if ((kind==='system' || kind==='admin') && !window.__skyrpAdmin) return { denied:true };
       if (!body && kind!=='do' && kind!=='pm') return null;
@@ -95,15 +95,15 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       if (typeof window.scrollToLastMessage==='function') window.scrollToLastMessage();
     }
 
-    // Send handler: echo locally (fix #1), forward raw, ping client for bubble.
+    // Chat bubble
     var sf=function(raw){
       var p=parse(raw); if(!p) return;
+	  if (p.command){ if (window.mp && typeof window.mp.send==='function') window.mp.send('cef::chat:send', raw); return; }
       if (p.denied){ pushSegs([{text:'Only admins can use that command.',color:COLORS.system}],'all'); return; }
       if (p.error){ pushSegs([{text:p.error,color:COLORS.system}],'personal'); return; }
       window.__skyrpLastEcho=p.plain;
       pushSegs(p.segs, p.tab);
       if (window.mp && typeof window.mp.send==='function') window.mp.send('cef::chat:send', raw);
-      if (p.bubble && window.skyrimPlatform.sendMessage) window.skyrimPlatform.sendMessage('skyrpChatBubble', p.kind, p.plain);
     };
 
     var chatWidget={ type:'chat', id:'chat', isInputHidden:false, placeholder:'', messages:window.chatMessages.slice(), send:sf };
@@ -118,6 +118,8 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       var us=s.indexOf('\\u001f');
       if (us>0 && /^[0-9]+$/.test(s.slice(0,us))) s=s.slice(us+1);
       if (window.__skyrpLastEcho && s.indexOf(window.__skyrpLastEcho)!==-1){ window.__skyrpLastEcho=null; return; } // skip our own echo
+	  var bubbleRefr=0;
+	  if (s.indexOf('[[B')===0){ var be=s.indexOf(']]'); var hex=be>3?s.slice(3,be):''; if (hex && /^[0-9a-fA-F]+$/.test(hex)){ bubbleRefr=parseInt(hex,16); s=s.slice(be+2); } }
       // Private message: "[[PM]]<sender>|<text>" -> Personal tab.
       if (s.indexOf('[[PM]]')===0){
         var rest=s.slice(6), bar=rest.indexOf('|');
@@ -138,7 +140,12 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
         if (ci===6){ col='#'+p.slice(0,6); var txt=p.slice(7); if(txt) segs.push({text:txt,color:col}); }
         else segs.push({text:'#{'+p,color:col});
       }
-      if (segs.length) pushSegs(segs,tab);
+      if (segs.length){
+        pushSegs(segs,tab);
+        if (bubbleRefr && window.skyrimPlatform && window.skyrimPlatform.sendMessage){
+          window.skyrimPlatform.sendMessage('skyrpChatBubble', bubbleRefr, segs.map(function(x){ return x.text; }).join(''));
+        }
+      }
     };
   } catch (e) {}
 })();`;
@@ -151,7 +158,7 @@ export class ChatService extends ClientListener {
   }
 
   private onBrowserMessage(e: BrowserMessageEvent): void {
-    if (e.arguments[0] === "skyrpChatBubble") this.showBubble(String(e.arguments[2] ?? ""));
+    if (e.arguments[0] === "skyrpChatBubble") this.showBubble(Number(e.arguments[1] ?? 0), String(e.arguments[2] ?? ""));
   }
 
   private onUpdate(): void {
@@ -179,12 +186,11 @@ export class ChatService extends ClientListener {
   }
 
   // Chat bubbles over the player's head for spoken lines (/say /me /my /looc).
-  private showBubble(text: string): void {
-    const player = this.sp.Game.getPlayer();
-    if (!text || !player) return;
-    const id = this.sp.createText(0, 0, text.slice(0, 80), [1, 1, 1, 1]);
+  private showBubble(refrId: number, text: string): void {
+    if (!text || !refrId) return;
+    const id = this.sp.createText(-1000, -1000, text.slice(0, 100), [1, 1, 1, 1]);
     this.sp.setTextSize(id, 0.4);
-    this.sp.setTextRefr(id, player.getFormID());
+    this.sp.setTextRefr(id, refrId);
     this.sp.setTextRefrNode(id, "NPC Head [Head]");
     this.sp.setTextRefrOffset(id, [0, 0, 40]);
     this.bubbles.push({ id, expiresAt: Date.now() + 6000 });
