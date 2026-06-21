@@ -571,13 +571,13 @@ export class AuthService extends ClientListener {
           ),
           tags: [/*"ELEMENT_SAME_LINE", "ELEMENT_STYLE_MARGIN_EXTENDED"*/],
         },
-        {
-          type: "button",
-          text: strings.play,
-          tags: ["BUTTON_STYLE_FRAME", "ELEMENT_STYLE_MARGIN_EXTENDED"],
-          click: () => window.skyrimPlatform.sendMessage(events.authAttempt),
-          hint: strings.connectToServer,
-        },
+//        {
+//          type: "button",
+//          text: strings.play,
+//          tags: ["BUTTON_STYLE_FRAME", "ELEMENT_STYLE_MARGIN_EXTENDED"],
+//          click: () => window.skyrimPlatform.sendMessage(events.authAttempt),
+//          hint: strings.connectToServer,
+//        },
         {
           type: "text",
           text: browserState.comment,
