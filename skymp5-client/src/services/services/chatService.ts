@@ -101,7 +101,6 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
 	  if (p.command){ if (window.mp && typeof window.mp.send==='function') window.mp.send('cef::chat:send', raw); return; }
       if (p.denied){ pushSegs([{text:'Only admins can use that command.',color:COLORS.system}],'all'); return; }
       if (p.error){ pushSegs([{text:p.error,color:COLORS.system}],'personal'); return; }
-      window.__skyrpLastEcho=p.plain;
       pushSegs(p.segs, p.tab);
       if (window.mp && typeof window.mp.send==='function') window.mp.send('cef::chat:send', raw);
     };
@@ -117,8 +116,7 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       // Strip the server's "<nonce>" prefix (makes repeats unique so they render).
       var us=s.indexOf('\\u001f');
       if (us>0 && /^[0-9]+$/.test(s.slice(0,us))) s=s.slice(us+1);
-      if (window.__skyrpLastEcho && s.indexOf(window.__skyrpLastEcho)!==-1){ window.__skyrpLastEcho=null; return; } // skip our own echo
-	  var bubbleRefr=0;
+      var bubbleRefr=0;
 	  if (s.indexOf('[[B')===0){ var be=s.indexOf(']]'); var hex=be>3?s.slice(3,be):''; if (hex && /^[0-9a-fA-F]+$/.test(hex)){ bubbleRefr=parseInt(hex,16); s=s.slice(be+2); } }
       // Private message: "[[PM]]<sender>|<text>" -> Personal tab.
       if (s.indexOf('[[PM]]')===0){
@@ -168,14 +166,21 @@ export class ChatService extends ClientListener {
     const owner = this.sp.storage["ownerModel"] as Record<string, unknown> | undefined;
     if (!owner) return;
 
+    const appearance = owner["appearance"] as { name?: string } | undefined;
+
     if (!this.mounted) {
       this.mounted = true;
-      const appearance = owner["appearance"] as { name?: string } | undefined;
-      const name = appearance?.name || this.sp.Game.getPlayer()?.getDisplayName() || "You";
+      const name = appearance?.name || "You";
       const isAdmin = owner["isAdmin"] === true;
       logTrace(this, "Mounting chat widget (local parse + render)");
       this.sp.browser.executeJavaScript(buildMountJs(name, isAdmin));
       this.sp.browser.setVisible(true);
+    }
+
+    const liveName = appearance?.name;
+    if (liveName && liveName !== this.lastName) {
+      this.lastName = liveName;
+      this.sp.browser.executeJavaScript(`window.__skyrpName=${JSON.stringify(liveName)};`);
     }
 
     const msg = owner[CHAT_MSG_PROP];
@@ -207,5 +212,6 @@ export class ChatService extends ClientListener {
 
   private mounted = false;
   private lastMsg: string | null = null;
+  private lastName: string | null = null;
   private bubbles: { id: number; expiresAt: number }[] = [];
 }
