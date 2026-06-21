@@ -291,16 +291,18 @@ ipcMain.handle('modlist:read', () => {
   const plugins = readLines('plugins.txt')
   if (!modlist) return { ok: false, error: `No modlist.txt under ${profileDir}. Check SKYRP_MO2_ROOT / profile.` }
 
-  const enabled    = modlist.filter(l => l.startsWith('+')).map(l => l.slice(1).trim())
-  const separators = enabled.filter(n => n.endsWith('_separator'))
-  const pluginList = (plugins || []).map(l => l.trim()).filter(l => l && !l.startsWith('#'))
-  return {
-    ok: true,
-    profileDir,
-    mods: enabled.filter(n => !n.endsWith('_separator')),
-    separators: separators.map(n => n.replace(/_separator$/, '')),
-    plugins: pluginList,
+  const mods = [], separators = []
+  for (const line of modlist) {
+    const name = line.slice(1).trim()
+    if (!name) continue
+    if (name.endsWith('_separator')) {
+      if (line[0] === '+' || line[0] === '-') separators.push(name.replace(/_separator$/, ''))
+    } else if (line[0] === '+') {
+      mods.push(name)
+    }
   }
+  const pluginList = (plugins || []).map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  return { ok: true, profileDir, mods, separators, plugins: pluginList }
 })
 
 ipcMain.handle('modlist:updateManifest', async () => {

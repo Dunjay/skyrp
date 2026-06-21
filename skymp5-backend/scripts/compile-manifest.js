@@ -167,7 +167,7 @@ async function main() {
   try {
     order = fs.readFileSync(path.join(PROFILE_DIR, 'modlist.txt'), 'utf8')
       .split(/\r?\n/)
-      .filter(l => l.startsWith('+'))
+      .filter(l => l.startsWith('+') || (l.startsWith('-') && l.slice(1).trim().endsWith('_separator')))
       .map(l => l.slice(1).trim())
       .filter(Boolean)
   } catch { /* no profile — fall back to every folder below */ }
