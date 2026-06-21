@@ -190,6 +190,11 @@ async function main() {
   const mods = []
   const inlineWarnings = []
 
+  // Stable per-mod content fingerprint: lets the launcher reinstall only the
+  // mods that actually changed instead of everything when the manifest is rebuilt.
+  const contentHash = files =>
+    sha256Buf(Buffer.from(files.map(f => `${f.to}:${f.sha256}`).sort().join('\n')))
+
   function directiveFor(absFile, toRel) {
     const buf = fs.readFileSync(absFile)
     const sha = sha256Buf(buf)
@@ -209,7 +214,7 @@ async function main() {
     if (rels.length === 0) continue
 
     const files = rels.map(rel => directiveFor(path.join(modDir, rel.split('/').join(path.sep)), rel))
-    mods.push({ name: modName, modId: readModId(modDir), files })
+    mods.push({ name: modName, modId: readModId(modDir), files, hash: contentHash(files) })
   }
 
   // ── 4. Optional game-root files (preloaders, etc.) ─────────────────────────
@@ -237,6 +242,7 @@ async function main() {
     order,      // full modlist.txt order, separators included
     plugins,    // plugins.txt load order
     root,
+    rootHash: contentHash(root),
   }
   fs.mkdirSync(DATA_DIR, { recursive: true })
   fs.writeFileSync(OUT, JSON.stringify(manifest))

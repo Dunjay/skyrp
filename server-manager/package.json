@@ -1,0 +1,30 @@
+{
+  "name": "skyrp-server-manager",
+  "version": "1.0.0",
+  "description": "Desktop control panel for the SkyRP server — services, launcher, modlist, client and players",
+  "main": "src/main.js",
+  "author": "SkyRP",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "electron": "41.2.0",
+    "electron-builder": "26.8.1"
+  },
+  "build": {
+    "appId": "com.skyrp.manager",
+    "productName": "SkyRP Server Manager",
+    "directories": { "output": "../build/server-manager" },
+    "files": ["src/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

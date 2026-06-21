@@ -1203,22 +1203,34 @@ async function runMO2Install() {
     const mb = n => (n / 1024 / 1024).toFixed(1)
 
     // ── Only (re)install what changed ────────────────────────────────────────
+    // Each mod carries a content hash; reinstall a mod only when its hash
+    // changed or its folder is missing — never the whole list. Mods whose hash
+    // matches are skipped entirely, so their archives are never re-downloaded.
     const sanitize       = n => String(n).replace(/[<>:"/\\|?*]/g, '')
     const modFolderPath  = m => path.join(mo2.getModsDir(), sanitize(m.name))
-    const manifestVersion = manifest.builtAt || ''
-    const versionChanged  = (store.get('manifestVersion') || '') !== manifestVersion
-    const rootSetUp       = fs.existsSync(path.join(skyrimPath, 'skse64_loader.exe'))
-    const needsRoot       = versionChanged || !rootSetUp
-    const modsToInstall   = manifest.mods.filter(m => versionChanged || !fs.existsSync(modFolderPath(m)))
+    const installedHashes = store.get('installedModHashes') || {}
+    const modChanged = m =>
+      !fs.existsSync(modFolderPath(m)) ||
+      !m.hash ||                                   // pre-hash manifest: be safe, reinstall
+      installedHashes[m.name] !== m.hash
+    const rootSetUp      = fs.existsSync(path.join(skyrimPath, 'skse64_loader.exe'))
+    const rootChanged    = (store.get('installedRootHash') || '') !== (manifest.rootHash || '')
+    const needsRoot      = !rootSetUp || rootChanged
+    const modsToInstall  = manifest.mods.filter(modChanged)
 
     const finishOrder = () => {
       const order = (Array.isArray(manifest.order) && manifest.order.length)
         ? manifest.order.slice()
         : manifest.mods.map(m => m.name)
       if (fs.existsSync(path.join(mo2.getModsDir(), 'SKSE')) && !order.includes('SKSE')) order.push('SKSE')
-      mo2.setModlistOrder(order)
+      mo2.setModlistOrder(order)        // also prunes managed mods dropped from the manifest
       mo2.setPlugins(manifest.plugins)
-      store.set('manifestVersion', manifestVersion)
+      // Persist hashes, dropping mods no longer in the manifest (folders pruned).
+      const hashes = {}
+      for (const m of manifest.mods) if (installedHashes[m.name]) hashes[m.name] = installedHashes[m.name]
+      store.set('installedModHashes', hashes)
+      store.set('installedRootHash', manifest.rootHash || '')
+      store.set('manifestVersion', manifest.builtAt || '')
     }
 
     if (modsToInstall.length === 0 && !needsRoot) {
@@ -1332,6 +1344,7 @@ async function runMO2Install() {
         ensureExtracted(ids)
         const r = mo2.applyMod(mod.name, mod.files, extractedDirs, mod.modId)
         if (r.error) failed.push(`${mod.name} (${r.error})`)
+        else installedHashes[mod.name] = mod.hash   // record so it's skipped next time
       } catch (err) {
         failed.push(`${mod.name} (${err.message})`)
       }

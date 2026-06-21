@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>SkyRP Server Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav id="tabs">
+    <button class="tab active" data-tab="console">Console</button>
+    <button class="tab" data-tab="launcher">Launcher</button>
+    <button class="tab" data-tab="modlist">Modlist</button>
+    <button class="tab" data-tab="client">Client</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <!-- Console -->
+    <section id="console" class="panel active">
+      <div class="row">
+        <button id="btn-start" class="action go">Start</button>
+        <button id="btn-stop" class="action stop">Stop</button>
+        <button id="btn-restart" class="action">Restart</button>
+        <span id="svc-status" class="status"></span>
+      </div>
+      <pre id="log" class="log"></pre>
+      <form id="cmd-form" class="row">
+        <input id="cmd" type="text" placeholder="Type a server command and press Enter…" autocomplete="off" />
+        <button class="action" type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- Launcher -->
+    <section id="launcher" class="panel">
+      <div class="field">
+        <label>Launcher version</label>
+        <div class="row">
+          <input id="launcher-version" type="text" placeholder="1.0.0" />
+          <button id="launcher-save" class="action">Save version</button>
+        </div>
+        <small>Updates the launcher package.json and the backend's reported version (version.js).</small>
+      </div>
+      <div class="field">
+        <button id="launcher-rebuild" class="action go">Rebuild launcher</button>
+        <small>Clears build/launcher, rebuilds, and names the installer SkyrimRoleplayLauncher.exe.</small>
+      </div>
+      <pre id="launcher-log" class="log small"></pre>
+    </section>
+
+    <!-- Modlist -->
+    <section id="modlist" class="panel">
+      <div class="row">
+        <button id="modlist-refresh" class="action">Read MO2 profile</button>
+        <button id="modlist-update" class="action go">Update manifest</button>
+      </div>
+      <div id="modlist-summary" class="cards"></div>
+      <pre id="modlist-log" class="log small"></pre>
+    </section>
+
+    <!-- Client -->
+    <section id="client" class="panel">
+      <div class="field">
+        <label>Client version</label>
+        <div class="row">
+          <input id="client-version" type="text" placeholder="1.0.0" />
+          <button id="client-save" class="action">Save version</button>
+        </div>
+        <small>Updates the client package.json and CLIENT_VERSION in the backend .env.</small>
+      </div>
+      <div class="field">
+        <button id="client-update" class="action go">Update client</button>
+        <small>Runs build plugin → build front-end → build client, in order.</small>
+      </div>
+      <div class="field">
+        <label>Whitelist players</label>
+        <button id="players-refresh" class="action small">Refresh</button>
+        <ul id="players" class="players"></ul>
+      </div>
+      <pre id="client-log" class="log small"></pre>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings" class="panel">
+      <p class="muted">Nothing here yet — reserved for future settings.</p>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <button id="modal-close" class="modal-close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

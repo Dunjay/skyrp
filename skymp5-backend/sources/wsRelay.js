@@ -81,6 +81,17 @@ wss.on('connection', (ws) => {
         return
       }
 
+      // Admin console (the SkyRP Server Manager). Shares the gamemode secret;
+      // forwards typed commands to the gamemode. Command output surfaces in the
+      // game-server log, which the manager already tails.
+      if (msg.type === 'auth' && msg.role === 'console') {
+        if (msg.secret !== RELAY_SECRET) { ws.close(4001, 'bad secret'); return }
+        role = 'console'
+        send(ws, { type: 'auth_ok', role: 'console' })
+        console.log('[ws-relay] console authenticated')
+        return
+      }
+
       if (msg.type === 'auth' && msg.nonce) {
         const uid = nonceMap.get(msg.nonce)
         if (uid === undefined) {
@@ -124,6 +135,14 @@ wss.on('connection', (ws) => {
         return
       }
 
+      return
+    }
+
+    // ── Console messages ──────────────────────────────────────────────────────
+    if (role === 'console') {
+      if (msg.type === 'console_command' && typeof msg.text === 'string') {
+        toGamemode({ type: 'console_command', text: msg.text })
+      }
       return
     }
 
