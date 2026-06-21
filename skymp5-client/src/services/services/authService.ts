@@ -242,9 +242,17 @@ export class AuthService extends ClientListener {
     logTrace(this, `Showing widgets and starting loop`);
 
     authData = this.readAuthDataFromDisk();
+    browserState.comment = authData ? strings.connecting : '';
     this.refreshWidgets();
     this.sp.browser.setVisible(true);
     this.sp.browser.setFocused(true);
+
+    // Auto sign-in
+    if (authData) {
+      this.writeAuthDataToDisk(authData);
+      this.controller.emitter.emit("authAttempt", { authGameData: { remote: authData } });
+      this.authAttemptProgressIndicator = true;
+    }
 
     const timersService = this.controller.lookupListener(TimersService);
 

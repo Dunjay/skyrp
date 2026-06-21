@@ -39,15 +39,7 @@ import { SweetTaffySkillMenuService } from "./services/services/sweetTaffySkillM
 import { LoadOrderVerificationService } from "./services/services/loadOrderVerificationService";
 import { BrowserService } from "./services/services/browserService";
 import { AuthService } from "./services/services/authService";
-// NOTE: The roleplay services below (CharacterSelect / Restraint / Housing /
-// Faction / Chat) use custom-packet contracts of our own design. The deployed
-// backend is the Frostfall gamemode, which has its own incompatible contracts
-// and pushes its UI via browser properties. These services are kept in the tree
-// but left UNREGISTERED so they don't conflict with Frostfall. Re-register them
-// only if switching to the matching gamemode.js, or after rewiring them to
-// Frostfall's contracts.
-// import { CharacterSelectService } from "./services/services/characterSelectService";
-// import { RestraintService } from "./services/services/restraintService";
+import { CharacterSelectService } from "./services/services/characterSelectService";
 import { HousingService } from "./services/services/housingService";
 import { PlayerActionService } from "./services/services/playerActionService";
 import { PersonalMenuService } from "./services/services/personalMenuService";
@@ -117,9 +109,7 @@ const main = () => {
       new LoadOrderVerificationService(sp, controller),
       new BrowserService(sp, controller),
       new AuthService(sp, controller),
-      // Frostfall-incompatible roleplay services intentionally not registered
-      // (see import block above). HousingService is rewired to drive Frostfall's
-      // /property chat commands, so it's enabled.
+      new CharacterSelectService(sp, controller),
       new HousingService(sp, controller),
       new PlayerActionService(sp, controller),
       new PersonalMenuService(sp, controller),

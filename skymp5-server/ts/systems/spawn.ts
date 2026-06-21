@@ -12,13 +12,13 @@ const MAX_CHARACTERS = 3;
 
 // Character-select protocol (gated by the "characterSelect" server setting).
 // When enabled, the server no longer auto-spawns on connect; instead it sends
-// the player their character slots and waits for a selection.
+// the player their character slots and waits for a selection. Matches the
+// client's CharacterSelectService.
 //
 //   Server -> Client:
-//     { customPacketType: "characterList", max, slots: [{ slot, exists, name? }] }
+//     { customPacketType: "characterSelectMenu", maxCharacters, characters: [ {name,info} | null ] }
 //   Client -> Server:
-//     { customPacketType: "selectCharacter", slot }   // load, or create if empty
-//     { customPacketType: "deleteCharacter", slot }   // destroy that character
+//     { customPacketType: "characterSelectResult", action: "play"|"create"|"delete", slot }
 //
 // With the flag off (default) the original single-character behaviour is kept,
 // so enabling the feature can never brick login on its own.
@@ -49,9 +49,10 @@ export class Spawn implements System {
   }
 
   customPacket(userId: number, type: string, content: Content, ctx: SystemContext): void {
-    if (!this.characterSelect) return;
-    if (type === "selectCharacter") this.onSelectCharacter(ctx, userId, Number(content.slot));
-    else if (type === "deleteCharacter") this.onDeleteCharacter(ctx, userId, Number(content.slot));
+    if (!this.characterSelect || type !== "characterSelectResult") return;
+    const slot = Number(content.slot);
+    if (content.action === "delete") this.onDeleteCharacter(ctx, userId, slot);
+    else this.onSelectCharacter(ctx, userId, slot);   // "play" or "create"
   }
 
   disconnect(userId: number, ctx: SystemContext): void {
@@ -72,14 +73,16 @@ export class Spawn implements System {
 
   private sendCharacterList(ctx: SystemContext, userId: number, profileId: number): void {
     const actors = ctx.svr.getActorsByProfileId(profileId).slice(0, MAX_CHARACTERS);
-    const slots = [];
+    const characters = [];
     for (let i = 0; i < MAX_CHARACTERS; i++) {
       const actorId = actors[i];
-      slots.push(actorId
-        ? { slot: i, exists: true, name: this.characterName(ctx, actorId) || `Character ${i + 1}` }
-        : { slot: i, exists: false });
+      characters.push(actorId
+        ? { name: this.characterName(ctx, actorId) || `Character ${i + 1}` }
+        : null);
     }
-    ctx.svr.sendCustomPacket(userId, JSON.stringify({ customPacketType: "characterList", max: MAX_CHARACTERS, slots }));
+    ctx.svr.sendCustomPacket(userId, JSON.stringify({
+      customPacketType: "characterSelectMenu", maxCharacters: MAX_CHARACTERS, characters,
+    }));
   }
 
   private onSelectCharacter(ctx: SystemContext, userId: number, slot: number): void {
@@ -113,7 +116,6 @@ export class Spawn implements System {
     }
 
     this.pending.delete(userId);
-    ctx.svr.sendCustomPacket(userId, JSON.stringify({ customPacketType: "characterSelected", slot }));
   }
 
   private onDeleteCharacter(ctx: SystemContext, userId: number, slot: number): void {
