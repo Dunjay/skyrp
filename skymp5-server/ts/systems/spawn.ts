@@ -72,15 +72,29 @@ export class Spawn implements System {
     } catch { return ""; }
   }
 
+  private slotMap(ctx: SystemContext, profileId: number): (number | undefined)[] {
+    const mp = ctx.svr as unknown as Mp;
+    const slots: (number | undefined)[] = new Array(MAX_CHARACTERS).fill(undefined);
+    const unassigned: number[] = [];
+    for (const a of ctx.svr.getActorsByProfileId(profileId)) {
+      const s = mp.get(a, "private.charSlot");
+      if (Number.isInteger(s) && s >= 0 && s < MAX_CHARACTERS && slots[s] === undefined) slots[s] = a;
+      else unassigned.push(a);
+    }
+    for (const a of unassigned) {
+      const free = slots.indexOf(undefined);
+      if (free < 0) break;
+      slots[free] = a;
+      mp.set(a, "private.charSlot", free);
+    }
+    return slots;
+  }
+
   private sendCharacterList(ctx: SystemContext, userId: number, profileId: number): void {
-    const actors = ctx.svr.getActorsByProfileId(profileId).slice(0, MAX_CHARACTERS);
-    const characters = [];
-    for (let i = 0; i < MAX_CHARACTERS; i++) {
-      const actorId = actors[i];
-      characters.push(actorId
+    const characters = this.slotMap(ctx, profileId).map((actorId, i) =>
+      actorId !== undefined
         ? { name: this.characterName(ctx, actorId) || `Character ${i + 1}` }
         : null);
-    }
     ctx.svr.sendCustomPacket(userId, JSON.stringify({
       customPacketType: "characterSelectMenu", maxCharacters: MAX_CHARACTERS, characters,
     }));
@@ -91,15 +105,15 @@ export class Spawn implements System {
     if (!auth || !Number.isInteger(slot) || slot < 0 || slot >= MAX_CHARACTERS) return;
 
     const mp = ctx.svr as unknown as Mp;
-    const actors = ctx.svr.getActorsByProfileId(auth.profileId);
-    let actorId = actors[slot];
-    const isNew = !actorId;
+    let actorId = this.slotMap(ctx, auth.profileId)[slot];
+    const isNew = actorId === undefined;
 
     if (isNew) {
       const { startPoints } = this.settingsObject;
       const idx = randomInteger(0, startPoints.length - 1);
       actorId = ctx.svr.createActor(0, startPoints[idx].pos, startPoints[idx].angleZ,
         +startPoints[idx].worldOrCell, auth.profileId);
+      mp.set(actorId, "private.charSlot", slot);   // persist the slot
       this.log("Creating character", actorId.toString(16), "in slot", slot);
     } else {
       this.log("Loading character", actorId.toString(16), "from slot", slot);
@@ -126,12 +140,11 @@ export class Spawn implements System {
     const auth = this.pending.get(userId);
     if (!auth || !Number.isInteger(slot) || slot < 0 || slot >= MAX_CHARACTERS) return;
 
-    const actorId = ctx.svr.getActorsByProfileId(auth.profileId)[slot];
-    if (actorId) {
+    const actorId = this.slotMap(ctx, auth.profileId)[slot];
+    if (actorId !== undefined) {
       ctx.svr.destroyActor(actorId);
       this.log("Deleted character", actorId.toString(16), "from slot", slot);
     }
-    // Re-send the (now updated) slot list so the menu refreshes.
     this.sendCharacterList(ctx, userId, auth.profileId);
   }
 
