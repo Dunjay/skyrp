@@ -43,7 +43,6 @@ set "LAUNCHER_DIST=..\skymp5-launcher\node_modules\electron\dist"
 if exist "%LAUNCHER_DIST%\electron.exe" (
     echo  - reusing Electron from the launcher install...
     xcopy /e /i /y /q "%LAUNCHER_DIST%" "%EL_PKG%\dist" >nul
-    > "%EL_PKG%\path.txt" echo dist\electron.exe
     if exist "%EL_BIN%" goto :done
 )
 
@@ -51,7 +50,6 @@ if exist "%LAUNCHER_DIST%\electron.exe" (
 if exist "%EL_ZIP%" (
     echo  - extracting %EL_ZIP% ...
     powershell -NoProfile -Command "Expand-Archive -Force '%EL_ZIP%' '%EL_PKG%\dist'"
-    > "%EL_PKG%\path.txt" echo dist\electron.exe
     if exist "%EL_BIN%" goto :done
 )
 
@@ -78,6 +76,11 @@ pause
 exit /b 1
 
 :done
+:: Electron's loader joins __dirname + "dist" + path.txt, so path.txt must hold
+:: ONLY "electron.exe" with no trailing newline. Rewrite it correctly here so a
+:: previously-bad path.txt (double "dist", stray CRLF) self-heals on rerun.
+<nul set /p "=electron.exe" > "%EL_PKG%\path.txt"
+
 echo.
 echo Done. Electron is ready.
 echo Launching the manager (Run.bat, which requests admin for service control)...
