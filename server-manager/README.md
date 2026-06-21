@@ -10,9 +10,12 @@ npm start             # dev run  (run the terminal as Administrator)
 npm run build:win     # packaged installer -> ../build/server-manager
 ```
 
-If `npm start` reports *"Electron failed to install correctly"*, run `setup.bat`
-— it reinstalls with install scripts enabled and verifies the Electron binary
-downloaded (set `ELECTRON_MIRROR` first if you're behind a firewall/proxy).
+If `npm start` reports *"Electron failed to install correctly"*, run `setup.bat`.
+It recovers the Electron runtime even on a flaky firewall by, in order:
+reusing the launcher's Electron (same version), extracting a zip you dropped in
+manually, then retrying the download. If all else fails it prints a direct
+download URL — save that zip as `server-manager\electron-v41.2.0-win32-x64.zip`
+and re-run `setup.bat` to install it with no further download.
 
 ## Tabs
 
