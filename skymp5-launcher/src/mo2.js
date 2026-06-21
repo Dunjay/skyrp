@@ -145,9 +145,6 @@ async function ensureInstalled(onProgress) {
 // Forward slashes everywhere: valid for Windows APIs and avoids INI escaping.
 const fwd = p => p.replace(/\\/g, '/')
 
-// Choose MO2 edition to skip popup
-const MO2_EDITIONS = new Set(['Steam', 'GOG', 'Epic Games', 'Microsoft Store'])
-
 // Detect the Skyrim SE store edition
 function detectEdition(gameDir) {
   try {
@@ -160,14 +157,45 @@ function detectEdition(gameDir) {
   return 'Steam'
 }
 
-// Resolve the edition to write into ModOrganizer.ini
-function resolveEdition(gameDir) {
-  try {
-    const cur = fs.readFileSync(path.join(getRoot(), 'ModOrganizer.ini'), 'utf8')
-    const m = cur.match(/^gameEdition\s*=\s*(.+)$/im)
-    if (m && MO2_EDITIONS.has(m[1].trim())) return m[1].trim()
-  } catch { /* no ini yet */ }
-  return detectEdition(gameDir)
+// Full portable-instance ini, written once when the instance is first created.
+function buildInstanceIni(skyrimPath, style) {
+  return [
+    '[General]',
+    'gameName=Skyrim Special Edition',
+    `gameEdition=${detectEdition(skyrimPath)}`,
+    `gamePath=@ByteArray(${fwd(skyrimPath)})`,
+    `selected_profile=@ByteArray(${PROFILE})`,
+    `version=${MO2_VERSION}`,
+    'first_start=false',
+    '',
+    '[Settings]',
+    'check_for_updates=false',
+    ...(style ? [`style=${style}`] : []),
+    '',
+    '[customExecutables]',
+    'size=1',
+    '1\\title=SKSE',
+    `1\\binary=${fwd(path.join(skyrimPath, 'skse64_loader.exe'))}`,
+    `1\\workingDirectory=${fwd(skyrimPath)}`,
+    '1\\arguments=',
+    '1\\hide=false',
+    '1\\toolbar=true',
+    '1\\ownicon=true',
+    '',
+  ].join('\r\n')
+}
+
+// Update only the path lines in an existing ini so a moved install still
+// launches, without touching gameEdition or any other MO2-written state.
+function healInstancePaths(iniPath, skyrimPath) {
+  const gamePath = fwd(skyrimPath)
+  const ssePath  = fwd(path.join(skyrimPath, 'skse64_loader.exe'))
+  let txt = fs.readFileSync(iniPath, 'utf8')
+  // Function replacers avoid '$' in paths being treated as replacement tokens.
+  txt = txt.replace(/^gamePath=.*$/m,            () => `gamePath=@ByteArray(${gamePath})`)
+  txt = txt.replace(/^1\\binary=.*$/m,           () => `1\\binary=${ssePath}`)
+  txt = txt.replace(/^1\\workingDirectory=.*$/m, () => `1\\workingDirectory=${gamePath}`)
+  fs.writeFileSync(iniPath, txt)
 }
 
 /**
@@ -206,34 +234,12 @@ function ensureInstance(skyrimPath, loadOrder) {
   // (global) instance instead.
   fs.writeFileSync(path.join(root, 'portable.txt'), '')
 
-  const style = pickDarkStyle()
-
-  // ModOrganizer.ini — rewritten on every call so a moved Skyrim folder heals.
-  const ini = [
-    '[General]',
-    'gameName=Skyrim Special Edition',
-    `gameEdition=${resolveEdition(skyrimPath)}`,
-    `gamePath=@ByteArray(${fwd(skyrimPath)})`,
-    `selected_profile=@ByteArray(${PROFILE})`,
-    `version=${MO2_VERSION}`,
-    'first_start=false',
-    '',
-    '[Settings]',
-    'check_for_updates=false',
-    ...(style ? [`style=${style}`] : []),
-    '',
-    '[customExecutables]',
-    'size=1',
-    '1\\title=SKSE',
-    `1\\binary=${fwd(path.join(skyrimPath, 'skse64_loader.exe'))}`,
-    `1\\workingDirectory=${fwd(skyrimPath)}`,
-    '1\\arguments=',
-    '1\\hide=false',
-    '1\\toolbar=true',
-    '1\\ownicon=true',
-    '',
-  ].join('\r\n')
-  fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), ini)
+  const iniPath = path.join(root, 'ModOrganizer.ini')
+  if (fs.existsSync(iniPath)) {
+    healInstancePaths(iniPath, skyrimPath)
+  } else {
+    fs.writeFileSync(iniPath, buildInstanceIni(skyrimPath, pickDarkStyle()))
+  }
 
   // Profile files — only created when missing so MO2-side changes survive.
   const modlistPath = path.join(getProfileDir(), 'modlist.txt')
