@@ -64,7 +64,7 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "artifactName": "SkyrimRoleplayLauncher.exe",
-      "include": "build/installer.nsh"
+      "include": "installer.nsh"
     },
     "asarUnpack": [
       "node_modules/7zip-bin/**"
