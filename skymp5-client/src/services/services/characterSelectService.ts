@@ -198,7 +198,7 @@ export class CharacterSelectService extends ClientListener {
     this.menuOpen = false;
     selectedSlot = null;
     confirmDeleteSlot = null;
-    this.sp.browser.executeJavaScript('(function(){var ws=(window.skyrimPlatform.widgets.get()||[]).filter(function(w){return w.id!==7;});window.skyrimPlatform.widgets.set(ws);})();');
+    this.sp.browser.executeJavaScript('window.skyrimPlatform.widgets.set([]);');
     this.sp.browser.setFocused(false);
   }
 
@@ -246,9 +246,8 @@ export class CharacterSelectService extends ClientListener {
     });
     widget.elements.push({ type: "button", text: strings.quit, tags: ["ELEMENT_SAME_LINE"], click: () => window.skyrimPlatform.sendMessage(events.quit) });
 
-    // Preserve any other widgets (e.g. the persistent chat) — only replace ours.
-    const others = (window.skyrimPlatform.widgets.get() || []).filter((w: any) => w.id !== 7);
-    window.skyrimPlatform.widgets.set([...others, widget]);
+    // Replace all widgets
+    window.skyrimPlatform.widgets.set([widget]);
   };
 
   private menuOpen = false;

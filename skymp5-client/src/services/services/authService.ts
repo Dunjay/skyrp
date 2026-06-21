@@ -187,11 +187,10 @@ export class AuthService extends ClientListener {
 
     switch (msgContent["customPacketType"]) {
       case 'characterSelectMenu':
-        // Pauses actor timeout until after user selects a character
+        // Pauses actor kick while we choose character
         this.loggingStartMoment = 0;
         this.authAttemptProgressIndicator = false;
         this.authDialogOpen = false;
-        this.sp.browser.executeJavaScript('(function(){var ws=(window.skyrimPlatform.widgets.get()||[]).filter(function(w){return w.id!==1;});window.skyrimPlatform.widgets.set(ws);})();');
         break;
       // case 'loginRequired':
       //   logTrace(this, 'loginRequired received');
