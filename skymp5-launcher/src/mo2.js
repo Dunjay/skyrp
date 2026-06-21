@@ -429,12 +429,25 @@ function setModlistOrder(order) {
     }
   }
 
-  // Keep any user-added entries (mods not part of the manifest) below ours.
+  // Reconcile the previous modlist against the new manifest:
+  //  - genuine user-added mods (not launcher-managed) are kept below ours;
+  //  - launcher-managed mods that dropped out of the manifest are stale — their
+  //    folder is deleted and their line removed, so changes apply without a
+  //    full reinstall.
   const modlistPath = path.join(getProfileDir(), 'modlist.txt')
   let userLines = []
   try {
-    userLines = fs.readFileSync(modlistPath, 'utf8').split(/\r?\n/)
+    const leftover = fs.readFileSync(modlistPath, 'utf8').split(/\r?\n/)
       .filter(l => /^[+-]/.test(l) && !managed.has(l.slice(1).trim()))
+    for (const line of leftover) {
+      const name = line.slice(1).trim()
+      if (isManaged(name)) {
+        try { fs.rmSync(lp(path.join(getModsDir(), name)), { recursive: true, force: true }) } catch {}
+        _log(`removed stale managed mod (no longer in manifest): ${name}`)
+      } else {
+        userLines.push(line)
+      }
+    }
   } catch { /* first install */ }
 
   const lines = [

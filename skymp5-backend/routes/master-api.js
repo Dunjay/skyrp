@@ -208,6 +208,10 @@ router.get('/:key/sessions/:session', async (req, res) => {
     return res.status(403).json({ error: access.error || 'accessDenied' })
   }
 
+  // Sliding expiration
+  entry.expiresAt = Date.now() + SESSION_TTL
+  saveSessions()
+
   res.json({
     user: {
       id:        entry.profileId,

@@ -160,13 +160,9 @@ export class AuthService extends ClientListener {
 
   private onCreateActorMessage(e: ConnectionMessage<CreateActorMessage>) {
     if (e.message.isMe) {
-      if (this.authDialogOpen) {
-        logTrace(this, `Received createActorMessage for self, resetting widgets`);
-        this.sp.browser.executeJavaScript('window.skyrimPlatform.widgets.set([]);');
-        this.authDialogOpen = false;
-      } else {
-        logTrace(this, `Received createActorMessage for self, but auth dialog was not open so not resetting widgets`);
-      }
+      logTrace(this, `Received createActorMessage for self, resetting widgets`);
+      this.sp.browser.executeJavaScript('window.skyrimPlatform.widgets.set([]);');
+      this.authDialogOpen = false;
     }
 
     this.loggingStartMoment = 0;
