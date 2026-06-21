@@ -41,6 +41,7 @@ module.exports = {
     backend:      path.join(repoRoot, 'skymp5-backend'),
     front:        path.join(repoRoot, 'skymp5-front'),
     client:       path.join(repoRoot, 'skymp5-client'),
+    server:       path.join(repoRoot, 'skymp5-server'),
     launcherPkg:  path.join(repoRoot, 'skymp5-launcher', 'package.json'),
     clientPkg:    path.join(repoRoot, 'skymp5-client', 'package.json'),
     versionRoute: path.join(repoRoot, 'skymp5-backend', 'routes', 'version.js'),

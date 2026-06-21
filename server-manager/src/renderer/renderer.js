@@ -39,6 +39,14 @@ async function svc(action, btn) {
 $('#btn-start').addEventListener('click', e => svc('start', e.target))
 $('#btn-stop').addEventListener('click', e => svc('stop', e.target))
 $('#btn-restart').addEventListener('click', e => svc('restart', e.target))
+$('#btn-rebuild').addEventListener('click', async e => {
+  e.target.disabled = true
+  appendLog(logNode, '\n--- rebuilding game server (build-ts) ---\n')
+  const r = await window.mgr.serverRebuild()
+  appendLog(logNode, r.ok ? '\nServer rebuilt and restarted.\n' : `\nFailed: ${r.error}\n`)
+  await refreshStatus()
+  e.target.disabled = false
+})
 
 $('#cmd-form').addEventListener('submit', async e => {
   e.preventDefault()
@@ -56,8 +64,8 @@ setInterval(refreshStatus, 10000)
 
 // ── Launcher ────────────────────────────────────────────────────────────────
 window.mgr.onBuildLog(t => {
-  // route build output to whichever build panel is active
-  const target = $('.panel.active')?.querySelector('.log.small') || $('#launcher-log')
+  // route build output to the active panel's log (Console uses #log, others .log.small)
+  const target = $('.panel.active')?.querySelector('.log') || $('#launcher-log')
   if (target) appendLog(target, t)
 })
 

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('mgr', {
   // Console / services
   servicesStatus:  ()        => ipcRenderer.invoke('services:status'),
   servicesAction:  (action)  => ipcRenderer.invoke('services:action', action),
+  serverRebuild:   ()        => ipcRenderer.invoke('server:rebuild'),
   consoleCommand:  (text)    => ipcRenderer.invoke('console:command', text),
   logDir:          ()        => ipcRenderer.invoke('log:dir'),
   onLog:           (cb)      => ipcRenderer.on('log:data', (_e, d) => cb(d)),

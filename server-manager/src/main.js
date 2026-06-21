@@ -106,6 +106,19 @@ ipcMain.handle('services:action', async (_e, action) => {
   return { ok: true, steps, status }
 })
 
+// Rebuild the game-server TS bundle (dist_back/skymp5-server.js) and restart it,
+// so server-side gamemode/system changes go live without the client pipeline.
+ipcMain.handle('server:rebuild', async () => {
+  const dir = config.paths.server
+  const dep = await ensureDeps(dir, 'npm', 'game server')
+  if (!dep.ok) return { ok: false, error: 'dependency install failed' }
+  const r = await runStreaming('npm', ['run', 'build-ts'], dir, 'game server: build-ts')
+  if (!r.ok) return { ok: false, error: 'build-ts failed — see log (TypeScript errors stop the build)' }
+  await nssm('stop', 'SkyrpGameServer')
+  await nssm('start', 'SkyrpGameServer')
+  return { ok: true }
+})
+
 // ── Log tailing (Console tab) ───────────────────────────────────────────────────
 // Follow nssm's per-service log files, emitting only newly-appended bytes.
 
