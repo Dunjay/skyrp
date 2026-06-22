@@ -14,6 +14,7 @@
 #include "ServerState.h"
 #include "SpSnippet.h"
 #include "SpSnippetFunctionGen.h"
+#include "TempleRespawn.h"
 #include "WorldState.h"
 #include "gamemode_events/DeathEvent.h"
 #include "gamemode_events/DropItemEvent.h"
@@ -1006,7 +1007,7 @@ void MpActor::SendAndSetDeathState(bool isDead, bool shouldTeleport)
     "MpActor::SendAndSetDeathState {:x} - isDead: {}, shouldTeleport: {}",
     GetFormId(), isDead, shouldTeleport);
 
-  auto position = GetSpawnPoint();
+  auto position = GetRespawnPosition();
 
   auto respawnMsg = GetDeathStateMsg(position, isDead, shouldTeleport);
   GetActorToSendTo().SendToUser(respawnMsg, true);
@@ -1463,6 +1464,15 @@ LocationalData MpActor::GetSpawnPoint() const
     }
   }
   return ChangeForm().spawnPoint;
+}
+
+LocationalData MpActor::GetRespawnPosition() const
+{
+  // Respawn
+  if (IsCreatedAsPlayer()) {
+    return TempleRespawn::GetNearestTemple(GetPos()).destination;
+  }
+  return GetSpawnPoint();
 }
 
 LocationalData MpActor::GetEditorLocationalData() const

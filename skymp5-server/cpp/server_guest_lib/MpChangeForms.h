@@ -106,7 +106,8 @@ public:
                                 { 0.f, 0.f, 72.f },
                                 FormDesc::Tamriel() };
 
-  float spawnDelay = 25.0f;
+  // Bleedout timer
+  float spawnDelay = 60.0f;
 
   std::vector<FormDesc> templateChain;
 

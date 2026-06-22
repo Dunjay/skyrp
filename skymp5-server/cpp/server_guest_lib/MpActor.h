@@ -151,6 +151,8 @@ public:
   void Teleport(const LocationalData& position);
   void SetSpawnPoint(const LocationalData& position);
   LocationalData GetSpawnPoint() const;
+  // Finds nearest temple
+  LocationalData GetRespawnPosition() const;
   LocationalData GetEditorLocationalData() const;
   const float GetRespawnTime() const;
   void SetRespawnTime(float time);
