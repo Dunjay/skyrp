@@ -250,6 +250,8 @@ Networking::UserId PartOne::GetUserByActor(uint32_t formId)
 
 void PartOne::DestroyActor(uint32_t actorFormId)
 {
+  worldState.GetFormAt<MpActor>(actorFormId).Delete();
+
   std::shared_ptr<MpActor> destroyedForm;
   worldState.DestroyForm<MpActor>(actorFormId, &destroyedForm);
 
