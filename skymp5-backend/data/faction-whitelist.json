@@ -13,7 +13,7 @@
       "scope": "hold",
       "group": "Eastmarch",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.eastmarch.steward"
     },
     {
@@ -21,8 +21,64 @@
       "scope": "hold",
       "group": "Eastmarch",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.eastmarch.captain-of-the-guard"
+    },
+    {
+      "id": "hold:eastmarch:court-wizard",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.eastmarch.court-wizard"
+    },
+    {
+      "id": "hold:eastmarch:thane",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.eastmarch.thane"
+    },
+    {
+      "id": "hold:eastmarch:housecarl",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.eastmarch.housecarl"
+    },
+    {
+      "id": "hold:eastmarch:village-elder",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.eastmarch.village-elder"
+    },
+    {
+      "id": "hold:eastmarch:guard",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.eastmarch.guard"
+    },
+    {
+      "id": "hold:eastmarch:lord-lady",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.eastmarch.lord-lady"
+    },
+    {
+      "id": "hold:eastmarch:citizen",
+      "scope": "hold",
+      "group": "Eastmarch",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.eastmarch.citizen"
     },
     {
       "id": "hold:falkreath:jarl",
@@ -37,7 +93,7 @@
       "scope": "hold",
       "group": "Falkreath",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.falkreath.steward"
     },
     {
@@ -45,8 +101,64 @@
       "scope": "hold",
       "group": "Falkreath",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.falkreath.captain-of-the-guard"
+    },
+    {
+      "id": "hold:falkreath:court-wizard",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.falkreath.court-wizard"
+    },
+    {
+      "id": "hold:falkreath:thane",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.falkreath.thane"
+    },
+    {
+      "id": "hold:falkreath:housecarl",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.falkreath.housecarl"
+    },
+    {
+      "id": "hold:falkreath:village-elder",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.falkreath.village-elder"
+    },
+    {
+      "id": "hold:falkreath:guard",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.falkreath.guard"
+    },
+    {
+      "id": "hold:falkreath:lord-lady",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.falkreath.lord-lady"
+    },
+    {
+      "id": "hold:falkreath:citizen",
+      "scope": "hold",
+      "group": "Falkreath",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.falkreath.citizen"
     },
     {
       "id": "hold:haafingar:jarl",
@@ -61,7 +173,7 @@
       "scope": "hold",
       "group": "Haafingar",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.haafingar.steward"
     },
     {
@@ -69,8 +181,64 @@
       "scope": "hold",
       "group": "Haafingar",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.haafingar.captain-of-the-guard"
+    },
+    {
+      "id": "hold:haafingar:court-wizard",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.haafingar.court-wizard"
+    },
+    {
+      "id": "hold:haafingar:thane",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.haafingar.thane"
+    },
+    {
+      "id": "hold:haafingar:housecarl",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.haafingar.housecarl"
+    },
+    {
+      "id": "hold:haafingar:village-elder",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.haafingar.village-elder"
+    },
+    {
+      "id": "hold:haafingar:guard",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.haafingar.guard"
+    },
+    {
+      "id": "hold:haafingar:lord-lady",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.haafingar.lord-lady"
+    },
+    {
+      "id": "hold:haafingar:citizen",
+      "scope": "hold",
+      "group": "Haafingar",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.haafingar.citizen"
     },
     {
       "id": "hold:the-pale:jarl",
@@ -85,7 +253,7 @@
       "scope": "hold",
       "group": "The Pale",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-pale.steward"
     },
     {
@@ -93,8 +261,64 @@
       "scope": "hold",
       "group": "The Pale",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-pale.captain-of-the-guard"
+    },
+    {
+      "id": "hold:the-pale:court-wizard",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.the-pale.court-wizard"
+    },
+    {
+      "id": "hold:the-pale:thane",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.the-pale.thane"
+    },
+    {
+      "id": "hold:the-pale:housecarl",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.the-pale.housecarl"
+    },
+    {
+      "id": "hold:the-pale:village-elder",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.the-pale.village-elder"
+    },
+    {
+      "id": "hold:the-pale:guard",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.the-pale.guard"
+    },
+    {
+      "id": "hold:the-pale:lord-lady",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.the-pale.lord-lady"
+    },
+    {
+      "id": "hold:the-pale:citizen",
+      "scope": "hold",
+      "group": "The Pale",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.the-pale.citizen"
     },
     {
       "id": "hold:the-reach:jarl",
@@ -109,7 +333,7 @@
       "scope": "hold",
       "group": "The Reach",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-reach.steward"
     },
     {
@@ -117,8 +341,64 @@
       "scope": "hold",
       "group": "The Reach",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-reach.captain-of-the-guard"
+    },
+    {
+      "id": "hold:the-reach:court-wizard",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.the-reach.court-wizard"
+    },
+    {
+      "id": "hold:the-reach:thane",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.the-reach.thane"
+    },
+    {
+      "id": "hold:the-reach:housecarl",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.the-reach.housecarl"
+    },
+    {
+      "id": "hold:the-reach:village-elder",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.the-reach.village-elder"
+    },
+    {
+      "id": "hold:the-reach:guard",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.the-reach.guard"
+    },
+    {
+      "id": "hold:the-reach:lord-lady",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.the-reach.lord-lady"
+    },
+    {
+      "id": "hold:the-reach:citizen",
+      "scope": "hold",
+      "group": "The Reach",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.the-reach.citizen"
     },
     {
       "id": "hold:the-rift:jarl",
@@ -133,7 +413,7 @@
       "scope": "hold",
       "group": "The Rift",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-rift.steward"
     },
     {
@@ -141,8 +421,64 @@
       "scope": "hold",
       "group": "The Rift",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.the-rift.captain-of-the-guard"
+    },
+    {
+      "id": "hold:the-rift:court-wizard",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.the-rift.court-wizard"
+    },
+    {
+      "id": "hold:the-rift:thane",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.the-rift.thane"
+    },
+    {
+      "id": "hold:the-rift:housecarl",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.the-rift.housecarl"
+    },
+    {
+      "id": "hold:the-rift:village-elder",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.the-rift.village-elder"
+    },
+    {
+      "id": "hold:the-rift:guard",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.the-rift.guard"
+    },
+    {
+      "id": "hold:the-rift:lord-lady",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.the-rift.lord-lady"
+    },
+    {
+      "id": "hold:the-rift:citizen",
+      "scope": "hold",
+      "group": "The Rift",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.the-rift.citizen"
     },
     {
       "id": "hold:whiterun:jarl",
@@ -157,7 +493,7 @@
       "scope": "hold",
       "group": "Whiterun",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.whiterun.steward"
     },
     {
@@ -165,8 +501,64 @@
       "scope": "hold",
       "group": "Whiterun",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.whiterun.captain-of-the-guard"
+    },
+    {
+      "id": "hold:whiterun:court-wizard",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.whiterun.court-wizard"
+    },
+    {
+      "id": "hold:whiterun:thane",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.whiterun.thane"
+    },
+    {
+      "id": "hold:whiterun:housecarl",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.whiterun.housecarl"
+    },
+    {
+      "id": "hold:whiterun:village-elder",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.whiterun.village-elder"
+    },
+    {
+      "id": "hold:whiterun:guard",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.whiterun.guard"
+    },
+    {
+      "id": "hold:whiterun:lord-lady",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.whiterun.lord-lady"
+    },
+    {
+      "id": "hold:whiterun:citizen",
+      "scope": "hold",
+      "group": "Whiterun",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.whiterun.citizen"
     },
     {
       "id": "hold:winterhold:jarl",
@@ -181,7 +573,7 @@
       "scope": "hold",
       "group": "Winterhold",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.winterhold.steward"
     },
     {
@@ -189,8 +581,64 @@
       "scope": "hold",
       "group": "Winterhold",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.winterhold.captain-of-the-guard"
+    },
+    {
+      "id": "hold:winterhold:court-wizard",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.winterhold.court-wizard"
+    },
+    {
+      "id": "hold:winterhold:thane",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.winterhold.thane"
+    },
+    {
+      "id": "hold:winterhold:housecarl",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.winterhold.housecarl"
+    },
+    {
+      "id": "hold:winterhold:village-elder",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.winterhold.village-elder"
+    },
+    {
+      "id": "hold:winterhold:guard",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.winterhold.guard"
+    },
+    {
+      "id": "hold:winterhold:lord-lady",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.winterhold.lord-lady"
+    },
+    {
+      "id": "hold:winterhold:citizen",
+      "scope": "hold",
+      "group": "Winterhold",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.winterhold.citizen"
     },
     {
       "id": "hold:hjaalmarch:jarl",
@@ -205,7 +653,7 @@
       "scope": "hold",
       "group": "Hjaalmarch",
       "rank": "Steward",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.hjaalmarch.steward"
     },
     {
@@ -213,8 +661,64 @@
       "scope": "hold",
       "group": "Hjaalmarch",
       "rank": "Captain of the Guard",
-      "capacity": 1,
+      "capacity": 4,
       "permission": "hold.hjaalmarch.captain-of-the-guard"
+    },
+    {
+      "id": "hold:hjaalmarch:court-wizard",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Court Wizard",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.court-wizard"
+    },
+    {
+      "id": "hold:hjaalmarch:thane",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Thane",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.thane"
+    },
+    {
+      "id": "hold:hjaalmarch:housecarl",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Housecarl",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.housecarl"
+    },
+    {
+      "id": "hold:hjaalmarch:village-elder",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Village Elder",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.village-elder"
+    },
+    {
+      "id": "hold:hjaalmarch:guard",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Guard",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.guard"
+    },
+    {
+      "id": "hold:hjaalmarch:lord-lady",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Lord/Lady",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.lord-lady"
+    },
+    {
+      "id": "hold:hjaalmarch:citizen",
+      "scope": "hold",
+      "group": "Hjaalmarch",
+      "rank": "Citizen",
+      "capacity": null,
+      "permission": "hold.hjaalmarch.citizen"
     },
     {
       "id": "faction:imperial-legion:legate",
