@@ -227,7 +227,15 @@ export class Login implements System {
 
         const rolesToAssign = isMemberOfAny ? [...new Set(fetchedRoles)] : roles;
 
-        this.emit(ctx, "spawnAllowed", userId, profile.id, rolesToAssign, profile.discordId);
+        // Mirror the master-api faction access so the Frostfall gamemode can
+        // read it from the character (private.frostfallAccess). Account-level:
+        // the same payload applies to every character on this profile.
+        const frostfallAccess = {
+          permissions: (profile as any).permissions || [],
+          gameFactions: (profile as any).gameFactions || [],
+          factions: (profile as any).factions || [],
+        };
+        this.emit(ctx, "spawnAllowed", userId, profile.id, rolesToAssign, profile.discordId, frostfallAccess);
         loginsCounter.inc();
         this.log("Logged as " + profile.id);
       })()

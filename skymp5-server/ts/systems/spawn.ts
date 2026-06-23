@@ -29,20 +29,20 @@ export class Spawn implements System {
   private characterSelect = false;
   private settingsObject!: Settings;
   // userId -> auth context awaiting a character selection
-  private pending = new Map<number, { profileId: number; roles: string[]; discordId?: string }>();
+  private pending = new Map<number, { profileId: number; roles: string[]; discordId?: string; access?: unknown }>();
 
   async initAsync(ctx: SystemContext): Promise<void> {
     this.settingsObject = await Settings.get();
     this.characterSelect = !!(this.settingsObject.allSettings &&
       (this.settingsObject.allSettings as Record<string, unknown>)["characterSelect"]);
 
-    const listenerFn = (userId: number, userProfileId: number, discordRoleIds: string[], discordId?: string) => {
+    const listenerFn = (userId: number, userProfileId: number, discordRoleIds: string[], discordId?: string, access?: unknown) => {
       if (this.characterSelect) {
-        this.pending.set(userId, { profileId: userProfileId, roles: discordRoleIds, discordId });
+        this.pending.set(userId, { profileId: userProfileId, roles: discordRoleIds, discordId, access });
         this.sendCharacterList(ctx, userId, userProfileId);
         return;
       }
-      this.legacySpawn(ctx, userId, userProfileId, discordRoleIds, discordId);
+      this.legacySpawn(ctx, userId, userProfileId, discordRoleIds, discordId, access);
     };
     ctx.gm.on("spawnAllowed", listenerFn);
     (ctx.svr as any)._onSpawnAllowed = listenerFn;
@@ -66,6 +66,20 @@ export class Spawn implements System {
   }
 
   // ── Character select ──────────────────────────────────────────────────────
+
+  // The Frostfall gamemode reads these private props off the character; mirror
+  // the master-api profile onto the actor so dashboard ranks resolve in-game.
+  private setFrostfallProps(mp: Mp, actorId: number, profileId: number, discordId?: string, access?: unknown): void {
+    try {
+      mp.set(actorId, "private.frostfallProfileId", profileId);
+      if (discordId !== undefined && discordId !== null) {
+        mp.set(actorId, "private.frostfallDiscordId", discordId);
+      }
+      if (access !== undefined && access !== null) {
+        mp.set(actorId, "private.frostfallAccess", access);
+      }
+    } catch { /* form vanished */ }
+  }
 
   private characterName(ctx: SystemContext, actorId: number): string {
     try {
@@ -143,6 +157,7 @@ export class Spawn implements System {
       mp.get(actorId, "private.indexed.discordId") !== auth.discordId) {
       mp.set(actorId, "private.indexed.discordId", auth.discordId);
     }
+    this.setFrostfallProps(mp, actorId, auth.profileId, auth.discordId, auth.access);
 
     this.pending.delete(userId);
   }
@@ -162,7 +177,7 @@ export class Spawn implements System {
   // ── Legacy single-character path (flag off): original behaviour verbatim ────
 
   private legacySpawn(ctx: SystemContext, userId: number, userProfileId: number,
-    discordRoleIds: string[], discordId?: string): void {
+    discordRoleIds: string[], discordId?: string, access?: unknown): void {
     const { startPoints } = this.settingsObject;
     let actorId = ctx.svr.getActorsByProfileId(userProfileId)[0];
     if (actorId) {
@@ -188,5 +203,6 @@ export class Spawn implements System {
       const forms = mp.findFormsByPropertyValue("private.indexed.discordId", discordId) as number[];
       console.log(`Found forms ${forms}`);
     }
+    this.setFrostfallProps(mp, actorId, userProfileId, discordId, access);
   }
 }
