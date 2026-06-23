@@ -67,16 +67,16 @@ export class Spawn implements System {
 
   // ── Character select ──────────────────────────────────────────────────────
 
-  // The Frostfall gamemode reads these private props off the character; mirror
+  // The SkyMP gamemode reads these private props off the character; mirror
   // the master-api profile onto the actor so dashboard ranks resolve in-game.
-  private setFrostfallProps(mp: Mp, actorId: number, profileId: number, discordId?: string, access?: unknown): void {
+  private setSkympProps(mp: Mp, actorId: number, profileId: number, discordId?: string, access?: unknown): void {
     try {
-      mp.set(actorId, "private.frostfallProfileId", profileId);
+      mp.set(actorId, "private.skympProfileId", profileId);
       if (discordId !== undefined && discordId !== null) {
-        mp.set(actorId, "private.frostfallDiscordId", discordId);
+        mp.set(actorId, "private.skympDiscordId", discordId);
       }
       if (access !== undefined && access !== null) {
-        mp.set(actorId, "private.frostfallAccess", access);
+        mp.set(actorId, "private.skympAccess", access);
       }
     } catch { /* form vanished */ }
   }
@@ -157,7 +157,7 @@ export class Spawn implements System {
       mp.get(actorId, "private.indexed.discordId") !== auth.discordId) {
       mp.set(actorId, "private.indexed.discordId", auth.discordId);
     }
-    this.setFrostfallProps(mp, actorId, auth.profileId, auth.discordId, auth.access);
+    this.setSkympProps(mp, actorId, auth.profileId, auth.discordId, auth.access);
 
     this.pending.delete(userId);
   }
@@ -203,6 +203,6 @@ export class Spawn implements System {
       const forms = mp.findFormsByPropertyValue("private.indexed.discordId", discordId) as number[];
       console.log(`Found forms ${forms}`);
     }
-    this.setFrostfallProps(mp, actorId, userProfileId, discordId, access);
+    this.setSkympProps(mp, actorId, userProfileId, discordId, access);
   }
 }

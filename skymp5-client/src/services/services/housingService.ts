@@ -178,7 +178,7 @@ export class HousingService extends ClientListener {
 
   private closeMenu(): void {
     this.menuOpen = false;
-    // Remove only our widget; leave Frostfall's chat (and anything else) intact.
+    // Remove only our widget; leave SkyMP's chat (and anything else) intact.
     this.sp.browser.executeJavaScript('(function(){var ws=(window.skyrimPlatform.widgets.get()||[]).filter(function(w){return w.id!==8;});window.skyrimPlatform.widgets.set(ws);})();');
     this.sp.browser.setFocused(false);
   }
@@ -200,7 +200,7 @@ export class HousingService extends ClientListener {
     elements.push({ type: "button", text: "cancel", tags: ["ELEMENT_STYLE_MARGIN_EXTENDED"], click: () => window.skyrimPlatform.sendMessage(events.cancel) });
 
     const widget = { type: "form", id: WIDGET_ID, caption: "Property", elements: elements };
-    // Preserve Frostfall's chat widget and anything else; only replace ours.
+    // Preserve SkyMP's chat widget and anything else; only replace ours.
     const others = (window.skyrimPlatform.widgets.get() || []).filter((w: any) => w.id !== WIDGET_ID);
     window.skyrimPlatform.widgets.set(others.concat([widget]));
   };

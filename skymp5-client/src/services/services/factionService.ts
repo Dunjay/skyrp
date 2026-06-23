@@ -127,6 +127,7 @@ export class FactionService extends ClientListener {
       return;
     }
     if (this.sp.browser.isFocused()) {
+      this.notify("Faction menu: press Escape to leave the chat box, then G.");
       return;
     }
 
@@ -147,6 +148,7 @@ export class FactionService extends ClientListener {
       return;
     }
     // Ask the server for the roster; it decides whether we may manage a hold.
+    this.notify("Requesting your hold roster…");
     this.sendPacket({ customPacketType: "factionMenuRequest" });
   }
 

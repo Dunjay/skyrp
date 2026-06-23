@@ -10,7 +10,7 @@ declare const window: any;
 
 const WIDGET_ID = 11;
 
-// Frostfall's trainable skills and the factions that publish a BBB document.
+// SkyMP's trainable skills and the factions that publish a BBB document.
 const SKILLS = ['destruction', 'restoration', 'alteration', 'conjuration', 'illusion', 'smithing', 'enchanting', 'alchemy'];
 const FACTION_DOCS = ['collegeOfWinterhold', 'companions', 'eastEmpireCompany', 'thievesGuild', 'bardsCollege'];
 
@@ -24,10 +24,10 @@ const events = {
 let view = 'main';
 
 /**
- * Personal RP hub for the Frostfall backend. Press the personal-menu key
+ * Personal RP hub for the SkyMP backend. Press the personal-menu key
  * (default U) to open a menu of self-targeted commands — help, your skills,
  * bounties, properties, and lecture/training/faction-doc submenus. Each button
- * fires the matching Frostfall chat command via the cef::chat:send contract;
+ * fires the matching SkyMP chat command via the cef::chat:send contract;
  * output appears in chat. Invents no new server packets.
  */
 export class PersonalMenuService extends ClientListener {
@@ -148,7 +148,7 @@ export class PersonalMenuService extends ClientListener {
     }
 
     const widget = { type: "form", id: WIDGET_ID, caption: "Menu", elements: elements };
-    // Preserve Frostfall's chat widget and anything else; only replace ours.
+    // Preserve SkyMP's chat widget and anything else; only replace ours.
     const others = (window.skyrimPlatform.widgets.get() || []).filter((w: any) => w.id !== WIDGET_ID);
     window.skyrimPlatform.widgets.set(others.concat([widget]));
   };
