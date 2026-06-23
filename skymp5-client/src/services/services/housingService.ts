@@ -1,80 +1,49 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
+import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomPacketMessage } from "../messages/customPacketMessage";
 import { MsgType } from "../../messages";
 import { FunctionInfo } from "../../lib/functionInfo";
-import { BrowserMessageEvent, ButtonEvent, DxScanCode } from "skyrimPlatform";
+import { Actor, BrowserMessageEvent, ButtonEvent, DxScanCode } from "skyrimPlatform";
+import { localIdToRemoteId } from "../../view/worldViewMisc";
 import { logTrace } from "../../logging";
 
 // for the browser-side widget setter (executed inside the CEF browser)
 declare const window: any;
 
-// Frostfall drives housing through chat commands (`/property …`). We send those
-// commands the same way the chat box does: a customPacket the gamemode reads as
-// { type: 'cef::chat:send', data: '<text>' }. Feedback comes back through chat.
+// House claiming as a server packet protocol (see docs_roleplay_property_factions).
+// Look at a door or container and press the housing key (default H) to open a
+// small Manage menu for that reference; each action is a `propertyRequest`
+// packet the gamemode resolves to the interior cell (the house) and enforces
+// against hold rank / ownership. Feedback returns as a `propertyNotice`.
 //
-// The property list is static in Frostfall (a fixed registry), so we embed it
-// here to build a real picker; live ownership status still shows via the
-// "/property list" chat reply.
-const HOLDS: { id: string, name: string }[] = [
-  { id: 'whiterun', name: 'Whiterun' },
-  { id: 'eastmarch', name: 'Eastmarch' },
-  { id: 'rift', name: 'The Rift' },
-  { id: 'reach', name: 'The Reach' },
-  { id: 'haafingar', name: 'Haafingar' },
-  { id: 'pale', name: 'The Pale' },
-  { id: 'falkreath', name: 'Falkreath' },
-  { id: 'hjaalmarch', name: 'Hjaalmarch' },
-  { id: 'winterhold', name: 'Winterhold' },
-];
-
-const PROPERTIES: { id: string, name: string, holdId: string, type: string }[] = [
-  { id: 'wrun_breezehome', name: 'Breezehome', holdId: 'whiterun', type: 'home' },
-  { id: 'wrun_breezeannex', name: 'Breezehome Annex', holdId: 'whiterun', type: 'business' },
-  { id: 'east_hjerim', name: 'Hjerim', holdId: 'eastmarch', type: 'home' },
-  { id: 'east_windhelm_shop', name: 'Windhelm Market Stall', holdId: 'eastmarch', type: 'business' },
-  { id: 'rift_honeyside', name: 'Honeyside', holdId: 'rift', type: 'home' },
-  { id: 'rift_riften_shop', name: 'Riften Stall', holdId: 'rift', type: 'business' },
-  { id: 'reach_vlindrel', name: 'Vlindrel Hall', holdId: 'reach', type: 'home' },
-  { id: 'reach_markarth_shop', name: 'Markarth Stall', holdId: 'reach', type: 'business' },
-  { id: 'haaf_proudspire', name: 'Proudspire Manor', holdId: 'haafingar', type: 'home' },
-  { id: 'haaf_solitude_shop', name: 'Solitude Market', holdId: 'haafingar', type: 'business' },
-  { id: 'pale_dawnstar_home', name: 'Dawnstar Cottage', holdId: 'pale', type: 'home' },
-  { id: 'pale_dawnstar_shop', name: 'Dawnstar Stall', holdId: 'pale', type: 'business' },
-  { id: 'falk_lakeview', name: 'Lakeview Manor', holdId: 'falkreath', type: 'home' },
-  { id: 'falk_falkreath_shop', name: 'Falkreath Stall', holdId: 'falkreath', type: 'business' },
-  { id: 'hjaal_windstad', name: 'Windstad Manor', holdId: 'hjaalmarch', type: 'home' },
-  { id: 'wint_college_quarters', name: 'College Quarters', holdId: 'winterhold', type: 'home' },
-];
-
+//   Client -> Server:
+//     { "customPacketType": "propertyRequest", "action": "claim"|"abandon"
+//       |"lock"|"unlock"|"transfer", "target": <serverFormId>, "recipient"?: <serverFormId> }
+//   Server -> Client:
+//     { "customPacketType": "propertyNotice", "text": "You now own this property." }
+//
+// Transfer is two-step: pick "transfer", then look at the new owner and press
+// the housing key again. Inert until the key is pressed; never opens for a person.
 const events = {
-  hold: 'housing:hold',
-  back: 'housing:back',
-  list: 'housing:list',
-  request: 'housing:request',
-  approve: 'housing:approve',
-  deny: 'housing:deny',
-  revoke: 'housing:revoke',
-  close: 'housing:close',
+  claim: 'housing:claim',
+  abandon: 'housing:abandon',
+  lock: 'housing:lock',
+  unlock: 'housing:unlock',
+  transfer: 'housing:transfer',
+  cancel: 'housing:cancel',
 };
 
 const WIDGET_ID = 8;
 
 // Module-level so the browser-side widget setter can read it (runtime injection).
-let selectedHold: string | null = null;
+let targetName = '';
 
-/**
- * In-game panel for Frostfall's housing. Press the housing key (default H) to
- * pick a hold, then a property, and request/approve/deny/revoke it. Each action
- * is sent as a Frostfall chat command (`/property …`); results appear in chat.
- *
- * This drives the Frostfall gamemode through its existing `cef::chat:send`
- * contract — it does not invent new server packets.
- */
 export class HousingService extends ClientListener {
   constructor(private sp: Sp, private controller: CombinedController) {
     super();
     this.controller.on("buttonEvent", (e) => this.onButtonEvent(e));
     this.controller.on("browserMessage", (e) => this.onBrowserMessage(e));
+    this.controller.emitter.on("customPacketMessage", (e) => this.onCustomPacketMessage(e));
 
     try {
       const settings = this.sp.settings["skymp5-client"] as any;
@@ -87,14 +56,53 @@ export class HousingService extends ClientListener {
   }
 
   private onButtonEvent(e: ButtonEvent): void {
-    if (e.code !== this.menuKey || !e.isDown || this.menuOpen) {
+    if (e.code !== this.menuKey || !e.isDown) {
       return;
     }
-    if (this.sp.browser.isFocused()) {
+    if (this.sp.browser.isFocused() || this.menuOpen) {
       return;
     }
-    selectedHold = null;
+
+    const ref = this.sp.Game.getCurrentCrosshairRef();
+
+    // Second step of a transfer: this press picks the new owner (a player).
+    if (this.pendingTransfer !== null) {
+      const transferTarget = this.pendingTransfer;
+      this.pendingTransfer = null;
+      const recipient = ref && Actor.from(ref) ? ref : null;
+      if (!recipient) {
+        this.notify("Transfer cancelled — that is not a person.");
+        return;
+      }
+      this.sendRequest({
+        action: "transfer",
+        target: transferTarget,
+        recipient: localIdToRemoteId(recipient.getFormID()),
+      });
+      return;
+    }
+
+    // Otherwise open the Manage menu for the door/container under the crosshair.
+    if (!ref || Actor.from(ref)) {
+      this.notify("Look at a door or container to manage it.");
+      return;
+    }
+    this.target = localIdToRemoteId(ref.getFormID());
+    targetName = (ref.getName() || "this").trim() || "this";
+    logTrace(this, `Opening housing menu for`, targetName, `(${this.target})`);
     this.openMenu();
+  }
+
+  private onCustomPacketMessage(event: ConnectionMessage<CustomPacketMessage>): void {
+    let content: Record<string, unknown> = {};
+    try {
+      content = JSON.parse(event.message.contentJsonDump);
+    } catch (e) {
+      return;
+    }
+    if (content["customPacketType"] === "propertyNotice" && typeof content["text"] === "string") {
+      this.notify(content["text"] as string);
+    }
   }
 
   private onBrowserMessage(e: BrowserMessageEvent): void {
@@ -102,38 +110,32 @@ export class HousingService extends ClientListener {
     if (typeof key !== "string" || !key.startsWith("housing:") || !this.menuOpen) {
       return;
     }
-    const arg = typeof e.arguments[1] === "string" ? (e.arguments[1] as string) : "";
+    const target = this.target;
 
     switch (key) {
-      case events.hold:
-        selectedHold = arg;
-        this.renderMenu();
-        break;
-      case events.back:
-        selectedHold = null;
-        this.renderMenu();
-        break;
-      case events.list:
-        this.sendCommand("/property list");
+      case events.claim:
+        this.sendRequest({ action: "claim", target });
         this.closeMenu();
         break;
-      case events.request:
-        this.sendCommand(`/property request ${arg}`);
+      case events.abandon:
+        this.sendRequest({ action: "abandon", target });
         this.closeMenu();
         break;
-      case events.approve:
-        this.sendCommand(`/property approve ${arg}`);
+      case events.lock:
+        this.sendRequest({ action: "lock", target });
         this.closeMenu();
         break;
-      case events.deny:
-        this.sendCommand(`/property deny ${arg}`);
+      case events.unlock:
+        this.sendRequest({ action: "unlock", target });
         this.closeMenu();
         break;
-      case events.revoke:
-        this.sendCommand(`/property revoke ${arg}`);
+      case events.transfer:
+        // Defer to a second key press where the player looks at the new owner.
+        this.pendingTransfer = target;
         this.closeMenu();
+        this.notify("Look at the new owner and press the housing key.");
         break;
-      case events.close:
+      case events.cancel:
         this.closeMenu();
         break;
       default:
@@ -141,27 +143,37 @@ export class HousingService extends ClientListener {
     }
   }
 
-  // Sends text to the gamemode exactly like the chat box does.
-  private sendCommand(text: string): void {
-    logTrace(this, `Housing command:`, text);
+  private sendRequest(payload: Record<string, unknown>): void {
+    this.sendPacket({ customPacketType: "propertyRequest", ...payload });
+  }
+
+  private sendPacket(payload: Record<string, unknown>): void {
     const message: CustomPacketMessage = {
       t: MsgType.CustomPacket,
-      contentJsonDump: JSON.stringify({ type: "cef::chat:send", data: text }),
+      contentJsonDump: JSON.stringify(payload),
     };
     this.controller.emitter.emit("sendMessage", { message, reliability: "reliable" });
   }
 
-  private openMenu(): void {
-    this.menuOpen = true;
-    this.renderMenu();
-    this.sp.browser.setVisible(true);
-    this.sp.browser.setFocused(true);
+  // Native UI calls throw if made straight from an input/packet handler; defer
+  // to the next update tick (a safe context), matching FactionService.
+  private notify(text: string): void {
+    this.controller.once("update", () => {
+      try {
+        this.sp.Debug.notification(text);
+      } catch (e) {
+        // ignore
+      }
+    });
   }
 
-  private renderMenu(): void {
+  private openMenu(): void {
+    this.menuOpen = true;
     this.sp.browser.executeJavaScript(
-      new FunctionInfo(this.browsersideWidgetSetter).getText({ HOLDS, PROPERTIES, selectedHold, events, WIDGET_ID })
+      new FunctionInfo(this.browsersideWidgetSetter).getText({ events, targetName, WIDGET_ID })
     );
+    this.sp.browser.setVisible(true);
+    this.sp.browser.setFocused(true);
   }
 
   private closeMenu(): void {
@@ -174,30 +186,18 @@ export class HousingService extends ClientListener {
   // Runs inside the CEF browser. Only injected vars + window are available.
   private browsersideWidgetSetter = () => {
     const elements: any[] = [];
-
-    if (!selectedHold) {
-      elements.push({ type: "text", text: "Select a hold", tags: [] });
-      for (let i = 0; i < HOLDS.length; i++) {
-        const h = HOLDS[i];
-        elements.push({ type: "button", text: h.name, tags: [], click: () => window.skyrimPlatform.sendMessage(events.hold, h.id) });
-      }
-      elements.push({ type: "button", text: "show my hold (/property list)", tags: ["ELEMENT_STYLE_MARGIN_EXTENDED"], click: () => window.skyrimPlatform.sendMessage(events.list) });
-      elements.push({ type: "button", text: "close", tags: [], click: () => window.skyrimPlatform.sendMessage(events.close) });
-    } else {
-      const hold = HOLDS.filter(function (h) { return h.id === selectedHold; })[0];
-      elements.push({ type: "text", text: (hold ? hold.name : selectedHold) + " properties", tags: [] });
-      const list = PROPERTIES.filter(function (p) { return p.holdId === selectedHold; });
-      for (let i = 0; i < list.length; i++) {
-        const p = list[i];
-        elements.push({ type: "text", text: p.name + " [" + p.type + "]", tags: ["ELEMENT_STYLE_MARGIN_EXTENDED"] });
-        elements.push({ type: "button", text: "request", tags: [], click: () => window.skyrimPlatform.sendMessage(events.request, p.id) });
-        elements.push({ type: "button", text: "approve", tags: ["ELEMENT_SAME_LINE"], click: () => window.skyrimPlatform.sendMessage(events.approve, p.id) });
-        elements.push({ type: "button", text: "deny", tags: ["ELEMENT_SAME_LINE"], click: () => window.skyrimPlatform.sendMessage(events.deny, p.id) });
-        elements.push({ type: "button", text: "revoke", tags: ["ELEMENT_SAME_LINE"], click: () => window.skyrimPlatform.sendMessage(events.revoke, p.id) });
-      }
-      elements.push({ type: "button", text: "back", tags: ["ELEMENT_STYLE_MARGIN_EXTENDED"], click: () => window.skyrimPlatform.sendMessage(events.back) });
-      elements.push({ type: "button", text: "close", tags: [], click: () => window.skyrimPlatform.sendMessage(events.close) });
+    elements.push({ type: "text", text: "Manage: " + targetName, tags: [] });
+    const actions: [string, string][] = [
+      ["claim", events.claim],
+      ["abandon", events.abandon],
+      ["lock", events.lock],
+      ["unlock", events.unlock],
+      ["transfer", events.transfer],
+    ];
+    for (let i = 0; i < actions.length; i++) {
+      elements.push({ type: "button", text: actions[i][0], tags: [], click: () => window.skyrimPlatform.sendMessage(actions[i][1]) });
     }
+    elements.push({ type: "button", text: "cancel", tags: ["ELEMENT_STYLE_MARGIN_EXTENDED"], click: () => window.skyrimPlatform.sendMessage(events.cancel) });
 
     const widget = { type: "form", id: WIDGET_ID, caption: "Property", elements: elements };
     // Preserve Frostfall's chat widget and anything else; only replace ours.
@@ -207,4 +207,6 @@ export class HousingService extends ClientListener {
 
   private menuKey: DxScanCode = DxScanCode.H;
   private menuOpen = false;
+  private target = 0;
+  private pendingTransfer: number | null = null;
 }
