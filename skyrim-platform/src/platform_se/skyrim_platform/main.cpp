@@ -224,7 +224,7 @@ inline uint32_t GetCefModifiers_(uint16_t aVirtualKey)
     modifiers |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
   }
 
-  if (GetAsyncKeyState(VK_CAPITAL) & 1) {
+  if (GetKeyState(VK_CAPITAL) & 1) {
     modifiers |= EVENTFLAG_CAPS_LOCK_ON;
   }
 
@@ -271,12 +271,13 @@ public:
     if (auto app = service->GetMyChromiumApp()) {
       int virtualKeyCode = VscToVk(code);
       int scan = code;
-      auto capitalizeLetters = GetCefModifiers_(virtualKeyCode) &
-        (EVENTFLAG_SHIFT_DOWN | EVENTFLAG_CAPS_LOCK_ON);
-      auto ch = conv->VkCodeToChar(virtualKeyCode, capitalizeLetters);
+      auto modifiers = GetCefModifiers_(virtualKeyCode);
+      bool shiftDown = (modifiers & EVENTFLAG_SHIFT_DOWN) != 0;
+      bool capsLockOn = (modifiers & EVENTFLAG_CAPS_LOCK_ON) != 0;
+      auto ch = conv->VkCodeToChar(virtualKeyCode, shiftDown, capsLockOn);
       if (ch)
-        app->InjectKey(cef_key_event_type_t::KEYEVENT_CHAR,
-                       GetCefModifiers_(virtualKeyCode), ch, scan);
+        app->InjectKey(cef_key_event_type_t::KEYEVENT_CHAR, modifiers, ch,
+                       scan);
     }
   }
 

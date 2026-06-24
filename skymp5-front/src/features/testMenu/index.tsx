@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SkyrimFrame } from '../../components/SkyrimFrame/SkyrimFrame';
 import { FrameButton } from '../../components/FrameButton/FrameButton';
 import content, { levels } from './content';
@@ -23,6 +23,10 @@ const TestMenu = ({ send }: { send: (message: string) => void }) => {
   const [playerData, setplayerData] = useState<number | null>(null);
   const [confirmDiscard, setconfirmDiscard] = useState(false);
 
+  // fix for the /skill quit spam (hopefully), See skillsMenu
+  const playerDataRef = useRef(playerData);
+  useEffect(() => { playerDataRef.current = playerData; }, [playerData]);
+
   const fetchData = (event) => {
     send('FFFFFFFF');
     const el = document.getElementsByClassName('fullPage')[0] as HTMLElement;
@@ -34,6 +38,8 @@ const TestMenu = ({ send }: { send: (message: string) => void }) => {
   };
 
   const quitHandler = () => {
+    // Only act when the menu is actually open
+    if (!playerDataRef.current) return;
     const el = document.getElementsByClassName('fullPage')[0] as HTMLElement;
     if (el) {
       el.style.display = 'flex';

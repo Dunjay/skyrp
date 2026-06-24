@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Draggable from 'react-draggable';
 import { ResizableBox } from 'react-resizable';
-import ChatCheckbox from './checkbox';
-import Dices from './dices';
-
 import ChatCorner from '../../img/chat_corner.svg';
 import Settings from './settings';
 import SendButton from './sendButton';
@@ -112,7 +109,11 @@ const Chat = (props) => {
       isReset.current = false;
       updateInput('');
       inputRef.current.innerHTML = '';
-      inputRef.current.focus();
+      // Returns mouse to look after hitting send
+      inputRef.current.blur();
+      if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) {
+        window.skyrimPlatform.sendMessage('cef::browser:unfocus');
+      }
       if (shout) {
         shoutReset.current = false;
         setTimeout(() => {
@@ -192,8 +193,14 @@ const Chat = (props) => {
   }, [isInputHidden, isSystemTab]);
 
   useEffect(() => {
+    const onUnfocused = () => setSettingsOpened(false);
+    window.addEventListener('skymp5-client:browserUnfocused', onUnfocused);
+    return () => window.removeEventListener('skymp5-client:browserUnfocused', onUnfocused);
+  }, []);
+
+  useEffect(() => {
     if (window.needToScroll) window.scrollToLastMessage();
-    if (inputRef !== undefined && inputRef.current !== undefined) {
+    if (isInputFocus && inputRef !== undefined && inputRef.current !== undefined) {
       inputRef.current.focus();
     }
   }, [props.messages]);
@@ -248,99 +255,95 @@ const Chat = (props) => {
       <Draggable handle='.chat-drag-bar' disabled={false} bounds={'.fullPage'}>
         <div id='chat'>
           <div className="chat-main">
-            <div className='chat-drag-bar' title='Drag to move chat' />
+            <div className='chat-header'>
+              <div className='chat-drag-bar' title='Drag to move chat' />
+              {
+                !isInputHidden &&
+                <button
+                  type='button'
+                  className='chat-settings-toggle'
+                  title='Settings'
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (inputRef.current && !isSystemTab) inputRef.current.focus();
+                    setSettingsOpened((open) => !open);
+                  }}
+                >
+                  {'⚙'}
+                </button>
+              }
+            </div>
             <ResizableBox
-              height={320}
-              maxConstraints={[800, 1100]}
+              width={495}
+              height={420}
+              maxConstraints={[1000, 1100]}
               minConstraints={[320, 320]}
-              axis={'y'}
+              axis={'both'}
               handle={
                  !isInputHidden &&
                  <div className='chat-corner'>
                    <img src={ChatCorner} />
                  </div>
               }
-              resizeHandles={['se']}
-              className={`list ${hideNonRP ? 'hideNonRP' : ''}`}
+              resizeHandles={!isInputHidden ? ['se'] : []}
+              className={`chat-resizable ${hideNonRP ? 'hideNonRP' : ''}`}
               id='handle'
             >
-              <div className='chat-list' style={{ fontSize }} ref={chatRef} onScroll={(e) => handleScroll()}>
-                {getList()}
+              <div className='chat-body'>
+                <div className='chat-list' style={{ fontSize }} ref={chatRef} onScroll={(e) => handleScroll()}>
+                  {getList()}
+                </div>
+                {
+                  isInputHidden
+                    ? <div style={{ height: '100px' }} />
+                    : (
+                      <div className='input'>
+                        <Channels
+                          active={channel}
+                          unread={{ personal: hasUnreadPersonal, system: hasUnreadSystem }}
+                          onSelect={(id) => {
+                            setChannel(id);
+                            if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
+                          }}
+                        />
+                        <div className='chat-input'>
+                          <ChatInput
+                            id="chatInput"
+                            className={'show'}
+                            type="text"
+                            readOnly={isSystemTab}
+                            placeholder={isSystemTab ? 'System messages appear here' : (placeholder !== undefined ? placeholder : '')}
+                            onChange={(value) => {
+                              handleInput(value);
+                              if (lastSendInputText + 1000 < Date.now()) {
+                                window.skyrimPlatform.sendMessage('onInput');
+                                setLastSendInputText(Date.now());
+                              }
+                            }}
+                            onFocus={(e) => changeInputFocus(true)}
+                            onBlur={(e) => changeInputFocus(false)}
+                            ref={inputRef}
+                            fontSize={fontSize}
+                            maxLines={MAX_LINES}
+                          />
+                          {
+                            showSendButton && !isSystemTab && <SendButton onClick={() => sendMessage(input)} />
+                          }
+                        </div>
+                        <div className='chat-checkboxes'>
+                          { !isSystemTab && doesIncludeShout &&
+                            <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
+                          }
+                          { !isSystemTab &&
+                            <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
+                          }
+                        </div>
+                      </div>
+                    )
+                }
               </div>
             </ResizableBox>
-            <div
-              style={{
-                height: '100px',
-                display: !isInputHidden ? 'none' : 'block'
-              }}
-            />
-            <div
-              className='input'
-              style={{
-                display: isInputHidden ? 'none' : 'block'
-              }}
-            >
-			  <Channels
-			    active={channel}
-			    unread={{ personal: hasUnreadPersonal, system: hasUnreadSystem }}
-			    onSelect={(id) => {
-				  setChannel(id);
-				  if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
-			    }}
-			  />
-              <div className='chat-input'>
-                <ChatInput
-                  id="chatInput"
-                  className={'show'}
-                  type="text"
-                  readOnly={isSystemTab}
-                  placeholder={isSystemTab ? 'System messages appear here' : (placeholder !== undefined ? placeholder : '')}
-                  onChange={(value) => {
-                    handleInput(value);
-                    if (lastSendInputText + 1000 < Date.now()) {
-                      window.skyrimPlatform.sendMessage('onInput');
-                      setLastSendInputText(Date.now());
-                    }
-                  }}
-                  onFocus={(e) => changeInputFocus(true)}
-                  onBlur={(e) => changeInputFocus(false)}
-                  ref={inputRef}
-                  fontSize={fontSize}
-                  maxLines={MAX_LINES}
-                />
-                {
-                  showSendButton && !isSystemTab && <SendButton onClick={() => sendMessage(input)} />
-                }
-              </div>
-              <div className='chat-checkboxes'>
-                <ChatCheckbox
-                  id={'settings'}
-                  text={'settings'}
-                  isChecked={isSettingsOpened}
-                  onChange={(e) => {
-                    if (inputRef.current && !isSystemTab) inputRef.current.focus();
-                    setSettingsOpened(e.target.checked);
-                  }} />
-                { !isSystemTab && doesIncludeShout &&
-                  <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
-                }
-                { !isSystemTab &&
-                  <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
-                }
-              </div>
-            </div>
           </div>
-          {
-            isInputHidden
-              ? <></>
-              : <Dices
-                  isOpened={isPouchOpened}
-                  setOpened={setPouchOpened}
-                  send={props.send}
-                  disableSound={disableDiceSounds}
-                  inputRef={inputRef}
-              />
-          }
         </div>
       </Draggable>
       {

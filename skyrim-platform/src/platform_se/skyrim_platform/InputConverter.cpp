@@ -1,7 +1,7 @@
 #include "InputConverter.h"
 
-wchar_t InputConverter::VkCodeToChar(uint8_t virtualKeyCode,
-                                     bool capitalLetters) noexcept
+wchar_t InputConverter::VkCodeToChar(uint8_t virtualKeyCode, bool shiftDown,
+                                     bool capsLockOn) noexcept
 {
   // https://github.com/cefsharp/CefSharp/issues/2143
   // https://gist.github.com/jankurianski/5b56b9e36526606bcf175747c592e1c8
@@ -12,8 +12,12 @@ wchar_t InputConverter::VkCodeToChar(uint8_t virtualKeyCode,
 
   std::array<uint8_t, 256> keyboardState;
   keyboardState.fill(0x00);
-  if (capitalLetters) {
+  if (shiftDown) {
     keyboardState[VK_SHIFT] = 0xff;
+  }
+  
+  if (capsLockOn) {
+    keyboardState[VK_CAPITAL] = 0x01;
   }
 
   // https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-tounicode

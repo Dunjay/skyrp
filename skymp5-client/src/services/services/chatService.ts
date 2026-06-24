@@ -163,6 +163,19 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       return [{text:body,color:c}]; // plain: system / flavour
     }
 
+    // Alias fixes
+    function forwardFor(kind, body){
+      var f=CH[kind].fmt;
+      if (f==='me')   return '/me '+body;
+      if (f==='my')   return '/my '+body;
+      if (f==='do')   return '/do '+body;
+      if (f==='ooc')  return '/looc '+body;
+      if (f==='shout')return '/shout '+body;
+      if (kind==='system') return '/system '+body;
+      // say family (say/low/whisper/wide) — unprefixed text is in-character say.
+      return body;
+    }
+
     // Parse a typed line. No slash = /say.
     function parse(raw){
       var text=String(raw).trim(); if(!text) return null;
@@ -181,11 +194,11 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
         var target=i2<0?body:body.slice(0,i2);
         var pmText=i2<0?'':body.slice(i2+1).trim();
         if (!target || !pmText) return { error:'Usage: /pm <player|account|id> <message>' };
-        return { kind:kind, segs:[{text:'To '+target+': '+pmText,color:PM}], tab:'personal' };
+        return { kind:kind, segs:[{text:'To '+target+': '+pmText,color:PM}], tab:'personal', fwd:raw };
       }
       if (!body) return null;
       var n=window.__skyrpName||'You';
-      return { kind:kind, segs:fmtLine(kind,n,body), tab:ch.tab };
+      return { kind:kind, segs:fmtLine(kind,n,body), tab:ch.tab, fwd:forwardFor(kind,body) };
     }
 
     // Merge neighbouring runs of the same colour (tidies up the name/quote splits).
@@ -216,7 +229,8 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       if (p.denied){ pushSegs([{text:'Only admins can use that command.',color:SYS}],'all'); return; }
       if (p.error){ pushSegs([{text:p.error,color:SYS}],'personal'); return; }
       pushSegs(p.segs, p.tab);
-      if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) window.skyrimPlatform.sendMessage('cef::chat:send', raw);
+      var fwd=(p.fwd!=null)?p.fwd:raw;
+      if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) window.skyrimPlatform.sendMessage('cef::chat:send', fwd);
     };
 
     var chatWidget={ type:'chat', id:'chat', isInputHidden:false, placeholder:'', messages:window.chatMessages.slice(), send:sf };
@@ -236,6 +250,12 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       if (s.indexOf('[[PM]]')===0){
         var rest=s.slice(6), bar=rest.indexOf('|');
         var sender=bar<0?'PM':rest.slice(0,bar), pmTxt=bar<0?rest:rest.slice(bar+1);
+        // Fix for some system messages not going into system
+        var lo=String(sender).toLowerCase();
+        if (lo==='system' || lo==='server'){
+          pushSegs([{text:pmTxt,color:SYS}],'system');
+          return;
+        }
         pushSegs([{text:sender+': '+pmTxt,color:PM}],'personal');
         return;
       }

@@ -15,9 +15,7 @@ export class BrowserService extends ClientListener {
 
     this.sp.browser.setVisible(false);
 
-    // Key bindings are configurable from the launcher's client settings so
-    // server owners can rebind them. Defaults: F6 frees/locks the cursor,
-    // Enter and T focus the chat widget for typing.
+    // Key bindings are configurable from the launcher's client settings
     try {
       const settings = this.sp.settings["skymp5-client"] as any;
       if (settings) {
@@ -81,6 +79,14 @@ export class BrowserService extends ClientListener {
 
     if (e.arguments[0] === onFrontLoadedEventKey) {
       this.controller.emitter.emit("browserWindowLoaded", {});
+    }
+
+    // After hitting enter, unfocuses the chat
+    if (e.arguments[0] === "cef::browser:unfocus") {
+      if (this.sp.browser.isFocused()) {
+        this.sp.browser.setFocused(false);
+        this.sp.browser.executeJavaScript(unfocusEventString);
+      }
     }
   }
 

@@ -16,17 +16,44 @@
   font-family: Din-pro;
   font-size: 16px;
   .chat-main {
+    display: flex;
     flex-direction: column;
-    // width: calc(100% - 60px);
-    width: 495px;
+    width: max-content;
     position: relative;
+    .chat-header {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .chat-settings-toggle {
+      flex: 0 0 auto;
+      height: 18px;
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: none;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fafafa;
+      font-size: 12px;
+      line-height: 1;
+      opacity: 0.6;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+      &:hover {
+        opacity: 1;
+      }
+    }
     .chat-drag-bar {
       height: 18px;
-      width: 100%;
+      flex: 1 1 auto;
       cursor: move;
       border-radius: 3px;
       background: rgba(0, 0, 0, 0.35);
-      margin-bottom: 4px;
       opacity: 0.5;
       transition: opacity 0.15s ease;
       &:hover {
@@ -38,8 +65,9 @@
       right: 0px;
       transition: all 0.15s ease;
       bottom: 0px;
+      z-index: 2;
       opacity: 0.8;
-      cursor: ns-resize;
+      cursor: nwse-resize;
       img {
         pointer-events: none;
         height: 100%;
@@ -51,10 +79,17 @@
         opacity: 1;
       }
     }
-    > .list {
+    .chat-resizable {
       position: relative;
-      .chat-list {
+      .chat-body {
+        display: flex;
+        flex-direction: column;
         height: 100%;
+        width: 100%;
+      }
+      .chat-list {
+        flex: 1 1 auto;
+        min-height: 0;
         width: 100%;
         overflow-y: scroll;
         &::-webkit-scrollbar {
@@ -68,8 +103,6 @@
           text-transform: none !important;
         }
       }
-      width: 100%;
-      resize: vertical;
       &::-webkit-scrollbar {
         width: 0 !important;
       }
@@ -106,11 +139,9 @@
           white-space: pre-line;
         }
       }
-    }
-    > .input {
-      margin: auto;
-      margin-top: 12px;
-      margin-bottom: 0;
+      .input {
+        margin-top: 12px;
+      }
     }
   }
   .chat-checkboxes {

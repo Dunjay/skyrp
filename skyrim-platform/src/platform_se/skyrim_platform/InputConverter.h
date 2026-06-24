@@ -4,8 +4,8 @@
 class InputConverter : public IInputConverter
 {
 public:
-  wchar_t VkCodeToChar(uint8_t virtualKeyCode,
-                       bool capitalLetters) noexcept override;
+  wchar_t VkCodeToChar(uint8_t virtualKeyCode, bool shiftDown,
+                       bool capsLockOn) noexcept override;
   void SwitchLayout() noexcept;
 
 private:
