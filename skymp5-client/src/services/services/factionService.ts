@@ -1,4 +1,5 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
+import { showSystemNotification } from "./systemNotification";
 import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomPacketMessage } from "../messages/customPacketMessage";
 import { MsgType } from "../../messages";
@@ -53,8 +54,7 @@ const translations = {
 
 type TranslationStrings = { [K in keyof typeof translations['ru']]: string };
 
-// Module-level state shared with the browser-side widget setter via runtime
-// injection (same pattern as HousingService / CharacterSelectService).
+// Module-level state shared with the browser-side widget setter via runtime injection
 let strings: TranslationStrings = translations['en'];
 let title = '';
 let members: FactionMember[] = [];
@@ -110,15 +110,9 @@ export class FactionService extends ClientListener {
     }
   }
 
-  // Native UI calls throw if made straight from an input/packet handler; defer
-  // to the next update tick (a safe context), matching AuthService's pattern.
   private notify(text: string): void {
     this.controller.once("update", () => {
-      try {
-        this.sp.Debug.notification(text);
-      } catch (e) {
-        // ignore
-      }
+      showSystemNotification(this.sp, text);
     });
   }
 
@@ -244,8 +238,7 @@ export class FactionService extends ClientListener {
     this.sp.browser.setFocused(false);
   }
 
-  // Runs inside the CEF browser. Only the injected variables (events, strings,
-  // title, members) and `window` are available here.
+  // Runs inside the CEF browser. Only the injected variables (events, strings, title, members) and `window` are available here.
   private browsersideWidgetSetter = () => {
     const widget: any = {
       type: "form",

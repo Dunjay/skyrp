@@ -5,6 +5,16 @@
   color: #939393;
 }
 
+.chat-input--text.chat-input--readonly {
+  cursor: default;
+  &:empty:before {
+    content: attr(data-placeholder);
+    pointer-events: none;
+    display: block;
+    color: #939393;
+  }
+}
+
 .chat-input {
   position: relative;
   width: 100%;

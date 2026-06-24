@@ -7,12 +7,14 @@ declare const window: any;
 
 const CHAT_MSG_PROP = 'ff_chatMsg';
 
+// Skyrim world units per meter ~69.99.
+const UNITS_PER_METER = 70;
+
 const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
   try {
     if (window.__skyrpChatReady) return;
     if (!window.skyrimPlatform || !window.skyrimPlatform.widgets) return;
     window.__skyrpChatReady = true;
-    window.__skyrpName = ${JSON.stringify(name)};
     window.__skyrpAdmin = ${isAdmin ? 'true' : 'false'};
     if (!window.chatMessages) window.chatMessages = [];
 
@@ -24,20 +26,117 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       document.head.appendChild(st);
     }
 
-    var WHITE = '#fafafa';
-    // Color per message kind.
-    var COLORS = { say:WHITE, me:'#c37bdd', my:'#c37bdd', do:'#c37bdd', looc:'#1f7a33',
-                   yell:'#ce3131', whisper:'#9a9a9a', ooc:WHITE, system:'#ff8c00',
-                   admin:'#ce3131', pm:'#4ec9b0' };
-    // Tab each kind shows in. 'all' = every tab.
-    var TAB = { say:'local', me:'local', my:'local', do:'local', looc:'local',
-                yell:'local', whisper:'local', ooc:'global', system:'all',
-                admin:'admin', pm:'personal' };
-    // Spoken lines that float over the head as a bubble.
-    var BUBBLE = { say:1, me:1, my:1, looc:1 };
-    var ALIAS = { shout:'yell', y:'yell', b:'looc', w:'whisper', dm:'pm', to:'pm', too:'pm' };
+    var WHITE='#fafafa';
+    var ME='#c2a3da';
+    var OOC='#3896f3';
+    var SHOUT='#772021';
+    var SYS='#eda841';
+    var PM='#4ec9b0';
+    var NAME='#fbf724';
 
-    // Keep "quoted" text white inside an otherwise-colored line (/me, /my).
+    var DARKEN_RANGE_M=80;
+    var CH = {
+      say:     {color:WHITE,  range:20,  tab:'local',    fmt:'say'},
+      low:     {color:WHITE,  range:10,  tab:'local',    fmt:'sayquiet'},
+      whisper: {color:WHITE,  range:3,   tab:'local',    fmt:'whisper'},
+      wide:    {color:WHITE,  range:80,  tab:'local',    fmt:'sayloud'},
+      shout:   {color:SHOUT,  range:160, tab:'local',    fmt:'shout'},
+      me:      {color:ME,     range:20,  tab:'local',    fmt:'me'},
+      melow:   {color:ME,     range:10,  tab:'local',    fmt:'me'},
+      melong:  {color:ME,     range:80,  tab:'local',    fmt:'me'},
+      my:      {color:ME,     range:20,  tab:'local',    fmt:'my'},
+      mylow:   {color:ME,     range:10,  tab:'local',    fmt:'my'},
+      mylong:  {color:ME,     range:80,  tab:'local',    fmt:'my'},
+      do:      {color:ME,     range:20,  tab:'local',    fmt:'do'},
+      dolow:   {color:ME,     range:10,  tab:'local',    fmt:'do'},
+      dolong:  {color:ME,     range:80,  tab:'local',    fmt:'do'},
+      ooc:     {color:OOC,    range:20,  tab:'local',    fmt:'ooc', oocLabel:'OOC'},
+      ooclow:  {color:OOC,    range:10,  tab:'local',    fmt:'ooc', oocLabel:'OOC - Low'},
+      ooclong: {color:OOC,    range:80,  tab:'local',    fmt:'ooc', oocLabel:'OOC - Long'},
+      system:  {color:SYS,    range:0,   tab:'all',      fmt:'plain', admin:1},
+      flavor:  {color:SYS,    range:0,   tab:'system',   fmt:'plain'},
+      pm:      {color:PM,     range:0,   tab:'personal', fmt:'pm'}
+    };
+
+    var ALIAS = {
+      l:'low',
+      w:'whisper',
+      long:'wide',
+      s:'shout', y:'shout', yell:'shout',
+      mel:'melow', mew:'melong', mewide:'melong',
+      myl:'mylow', myw:'mylong', mywide:'mylong',
+      dol:'dolow', dow:'dolong', dowide:'dolong',
+      b:'ooc', looc:'ooc',
+      bl:'ooclow', loocl:'ooclow', oocl:'ooclow', blow:'ooclow', looclow:'ooclow',
+      bw:'ooclong', loocw:'ooclong', oocw:'ooclong', bwide:'ooclong', loocwide:'ooclong', blong:'ooclong', looclong:'ooclong',
+      dm:'pm', to:'pm', too:'pm'
+    };
+
+    if (!window.__skyrpNames) window.__skyrpNames = [];
+    window.__skyrpSetNames=function(full){
+      window.__skyrpName=String(full==null?'':full);
+      var parts=window.__skyrpName.trim().split(' ').filter(function(x){ return x.length; });
+      var arr=[];
+      if (window.__skyrpName.trim()) arr.push(window.__skyrpName.trim());
+      if (parts.length>1){ arr.push(parts[0]); arr.push(parts[parts.length-1]); }
+      var seen={}, out=[];
+      for (var i=0;i<arr.length;i++){ var k=arr[i].toLowerCase(); if(!seen[k]){ seen[k]=1; out.push(arr[i]); } }
+      window.__skyrpNames=out;
+    };
+    window.__skyrpSetNames(${JSON.stringify(name)});
+
+    function isWordChar(ch){
+      return (ch>='a'&&ch<='z')||(ch>='A'&&ch<='Z')||(ch>='0'&&ch<='9');
+    }
+    // Re-colour any character name (whole-word, case-insensitive) to NAME.
+    function highlightNames(segs){
+      var names=(window.__skyrpNames||[]).filter(function(n){ return n && n.length>1; });
+      if (!names.length) return segs;
+      names=names.slice().sort(function(a,b){ return b.length-a.length; }); // longest first
+      var out=[];
+      for (var s=0;s<segs.length;s++){
+        var seg=segs[s];
+        if (seg.color===NAME){ out.push(seg); continue; }
+        var text=seg.text, low=text.toLowerCase(), pos=0;
+        while (pos<text.length){
+          var best=-1, bestLen=0;
+          for (var k=0;k<names.length;k++){
+            var nm=names[k].toLowerCase(), idx=low.indexOf(nm,pos);
+            while (idx>=0){
+              var before=idx>0?text.charAt(idx-1):' ';
+              var after=idx+nm.length<text.length?text.charAt(idx+nm.length):' ';
+              if (!isWordChar(before) && !isWordChar(after)) break;
+              idx=low.indexOf(nm,idx+1);
+            }
+            if (idx>=0 && (best===-1 || idx<best)){ best=idx; bestLen=nm.length; }
+          }
+          if (best===-1){ out.push({text:text.slice(pos),color:seg.color}); break; }
+          if (best>pos) out.push({text:text.slice(pos,best),color:seg.color});
+          out.push({text:text.slice(best,best+bestLen),color:NAME});
+          pos=best+bestLen;
+        }
+      }
+      return out;
+    }
+
+    function darken(hex, t){
+      t=t<0?0:(t>1?1:t);
+      var f=1-t*0.6;
+      var h=hex.charAt(0)==='#'?hex.slice(1):hex;
+      if (h.length===3) h=h.charAt(0)+h.charAt(0)+h.charAt(1)+h.charAt(1)+h.charAt(2)+h.charAt(2);
+      var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+      if (isNaN(r)||isNaN(g)||isNaN(b)) return hex;
+      function hx(v){ v=Math.round(v); v=v<0?0:(v>255?255:v); var x=v.toString(16); return x.length<2?'0'+x:x; }
+      return '#'+hx(r*f)+hx(g*f)+hx(b*f);
+    }
+    function darkenSegs(segs, t){
+      if (!(t>0)) return segs;
+      return segs.map(function(seg){
+        return { text:seg.text, color: seg.color===NAME ? seg.color : darken(seg.color,t) };
+      });
+    }
+
+    // Allows "quoted text" to appear as /say
     function quoteSegs(text, base){
       var segs=[], re=/"([^"]*)"/g, last=0, m;
       while ((m=re.exec(text))){
@@ -49,6 +148,21 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       return segs;
     }
 
+    // Build the coloured segments for a line.
+    function fmtLine(kind, n, body){
+      var ch=CH[kind], c=ch.color, f=ch.fmt;
+      if (f==='say')     return [{text:n+' says: "'+body+'"',color:c}];
+      if (f==='sayquiet')return [{text:n+' says quietly: "'+body+'"',color:c}];
+      if (f==='whisper') return [{text:n+' whispers: "'+body+'"',color:c}];
+      if (f==='sayloud') return [{text:n+' says loudly: "'+body+'"',color:c}];
+      if (f==='shout')   return [{text:n+' shouts: "'+body+'"',color:c}];
+      if (f==='me')      return [{text:n+' ',color:c}].concat(quoteSegs(body,c));
+      if (f==='my')      return [{text:n+"'s ",color:c}].concat(quoteSegs(body,c));
+      if (f==='do')      return quoteSegs(body,c);
+      if (f==='ooc')     return [{text:n+' ('+ch.oocLabel+'): "'+body+'"',color:c}];
+      return [{text:body,color:c}]; // plain: system / flavour
+    }
+
     // Parse a typed line. No slash = /say.
     function parse(raw){
       var text=String(raw).trim(); if(!text) return null;
@@ -58,35 +172,34 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
         var cmd=(i<0?text:text.slice(0,i)).slice(1).toLowerCase();
         body=(i<0?'':text.slice(i+1)).trim();
         kind=ALIAS[cmd]||cmd;
-        if (!COLORS[kind]){ return { command:true }; }
+        if (!CH[kind]){ return { command:true }; }
       }
-      if ((kind==='system' || kind==='admin') && !window.__skyrpAdmin) return { denied:true };
-      if (!body && kind!=='do' && kind!=='pm') return null;
-
-      var n=window.__skyrpName||'You', c=COLORS[kind], segs, plain=body;
-      if (kind==='say'){ segs=[{text:n+' says. "'+body+'"',color:c}]; }
-      else if (kind==='me'){ segs=[{text:n+' ',color:c}].concat(quoteSegs(body,c)); plain=n+' '+body; }
-      else if (kind==='my'){ segs=[{text:n+"'s ",color:c}].concat(quoteSegs(body,c)); plain=n+"'s "+body; }
-      else if (kind==='do'){ segs=quoteSegs(body,c); }
-      else if (kind==='looc'){ segs=[{text:n+': '+body,color:c}]; plain=n+': '+body; }
-      else if (kind==='yell'){ plain=(n+' shouts '+body).toUpperCase(); segs=[{text:plain,color:c}]; }
-      else if (kind==='whisper'){ segs=[{text:n+' whispers, "'+body+'"',color:c}]; }
-      else if (kind==='ooc'){ segs=[{text:n+': '+body,color:c}]; }
-      else if (kind==='system'){ segs=[{text:body,color:c}]; }
-      else if (kind==='admin'){ segs=[{text:n+': '+body,color:c}]; }
-      else if (kind==='pm'){
+      var ch=CH[kind];
+      if (ch.admin && !window.__skyrpAdmin) return { denied:true };
+      if (kind==='pm'){
         var i2=body.indexOf(' ');
         var target=i2<0?body:body.slice(0,i2);
         var pmText=i2<0?'':body.slice(i2+1).trim();
         if (!target || !pmText) return { error:'Usage: /pm <player|account|id> <message>' };
-        segs=[{text:'To '+target+': '+pmText,color:c}];
-        plain=pmText;
+        return { kind:kind, segs:[{text:'To '+target+': '+pmText,color:PM}], tab:'personal' };
       }
-      return { kind:kind, segs:segs, tab:TAB[kind], bubble:!!BUBBLE[kind], plain:plain };
+      if (!body) return null;
+      var n=window.__skyrpName||'You';
+      return { kind:kind, segs:fmtLine(kind,n,body), tab:ch.tab };
     }
 
+    // Merge neighbouring runs of the same colour (tidies up the name/quote splits).
+    function mergeSegs(segs){
+      var out=[];
+      for (var i=0;i<segs.length;i++){
+        var s=segs[i];
+        if (out.length && out[out.length-1].color===s.color) out[out.length-1].text+=s.text;
+        else out.push({text:s.text,color:s.color});
+      }
+      return out;
+    }
     function pushSegs(segs, tab){
-      var t=segs.map(function(s){ return {text:s.text,color:s.color,opacity:1,type:['default']}; });
+      var t=mergeSegs(highlightNames(segs)).map(function(s){ return {text:s.text,color:s.color,opacity:1,type:['default']}; });
       window.chatMessages.push({text:t, category:'plain', opacity:1, channel:tab});
       if (window.chatMessages.length>100) window.chatMessages.shift();
       var w=window.skyrimPlatform.widgets.get()||[];
@@ -96,12 +209,12 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       if (typeof window.scrollToLastMessage==='function') window.scrollToLastMessage();
     }
 
-    // Chat bubble
+    // Local echo + send to server.
     var sf=function(raw){
       var p=parse(raw); if(!p) return;
 	  if (p.command){ if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) window.skyrimPlatform.sendMessage('cef::chat:send', raw); return; }
-      if (p.denied){ pushSegs([{text:'Only admins can use that command.',color:COLORS.system}],'all'); return; }
-      if (p.error){ pushSegs([{text:p.error,color:COLORS.system}],'personal'); return; }
+      if (p.denied){ pushSegs([{text:'Only admins can use that command.',color:SYS}],'all'); return; }
+      if (p.error){ pushSegs([{text:p.error,color:SYS}],'personal'); return; }
       pushSegs(p.segs, p.tab);
       if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) window.skyrimPlatform.sendMessage('cef::chat:send', raw);
     };
@@ -111,27 +224,27 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
     var cur=(window.skyrimPlatform.widgets.get()||[]).filter(function(w){ return w.type!=='chat'; });
     window.skyrimPlatform.widgets.set([chatWidget].concat(cur)); // always own chat
 
-    // Incoming text from the server / other players.
-    window.__skyrpAddChat=function(raw){
+    // Incoming text from the server / other players and distance dimming
+    window.__skyrpAddChat=function(raw, dist){
       var s=String(raw);
-      // Strip the server's "<nonce>" prefix (makes repeats unique so they render).
+      // Strip the server's "<nonce>" prefix (makes repeats unique so they render).
       var us=s.indexOf('\\u001f');
       if (us>0 && /^[0-9]+$/.test(s.slice(0,us))) s=s.slice(us+1);
       var bubbleRefr=0;
 	  if (s.indexOf('[[B')===0){ var be=s.indexOf(']]'); var hex=be>3?s.slice(3,be):''; if (hex && /^[0-9a-fA-F]+$/.test(hex)){ bubbleRefr=parseInt(hex,16); s=s.slice(be+2); } }
-      // Private message: "[[PM]]<sender>|<text>" -> Personal tab.
+      // Private messages
       if (s.indexOf('[[PM]]')===0){
         var rest=s.slice(6), bar=rest.indexOf('|');
         var sender=bar<0?'PM':rest.slice(0,bar), pmTxt=bar<0?rest:rest.slice(bar+1);
-        pushSegs([{text:sender+': '+pmTxt,color:COLORS.pm}],'personal');
+        pushSegs([{text:sender+': '+pmTxt,color:PM}],'personal');
         return;
       }
-      // Channel tag -> tab. Untagged lines are local (say/me/my/do/looc/yell/whisper).
+      // Channel tag -> tab. Untagged lines are local (spoken / emote / ooc).
       var tab='local';
-      if (s.indexOf('[[G]]')===0){ tab='global'; s=s.slice(5); }
+      if (s.indexOf('[[G]]')===0){ tab='local'; s=s.slice(5); }      // legacy global -> local
       else if (s.indexOf('[[S]]')===0){ tab='all'; s=s.slice(5); }
       else if (s.indexOf('[[A]]')===0){ tab='admin'; s=s.slice(5); }
-      // Parse a '#{rrggbb}text' colored line.
+      // Parse a '#{rrggbb}text' coloured line.
       var parts=s.split('#{'), segs=[], col=WHITE;
       for (var i=0;i<parts.length;i++){ var p=parts[i];
         if (i===0){ if(p) segs.push({text:p,color:col}); continue; }
@@ -140,11 +253,25 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
         else segs.push({text:'#{'+p,color:col});
       }
       if (segs.length){
+        var d=(typeof dist==='number')?dist:-1;
+        if (d>0) segs=darkenSegs(segs, d/DARKEN_RANGE_M);
         pushSegs(segs,tab);
         if (bubbleRefr && window.skyrimPlatform && window.skyrimPlatform.sendMessage){
           window.skyrimPlatform.sendMessage('skyrpChatBubble', bubbleRefr, segs.map(function(x){ return x.text; }).join(''));
         }
       }
+    };
+
+    // Vanilla-style corner notifications system tab
+    window.__skyrpAddSystem=function(text){
+      var t=String(text==null?'':text); if(!t) return;
+      pushSegs([{text:t,color:SYS}],'system');
+    };
+
+    // Lines triggered by spells, conditions, zones, etc
+    window.__skyrpAddFlavor=function(text){
+      var t=String(text==null?'':text); if(!t) return;
+      pushSegs([{text:t,color:SYS}], CH.flavor.tab);
     };
   } catch (e) {}
 })();`;
@@ -192,17 +319,42 @@ export class ChatService extends ClientListener {
     const liveName = appearance?.name;
     if (liveName && liveName !== this.lastName) {
       this.lastName = liveName;
-      this.sp.browser.executeJavaScript(`window.__skyrpName=${JSON.stringify(liveName)};`);
+      this.sp.browser.executeJavaScript(`window.__skyrpSetNames && window.__skyrpSetNames(${JSON.stringify(liveName)});`);
     }
 
     const msg = owner[CHAT_MSG_PROP];
     if (typeof msg === "string" && msg !== "" && msg !== this.lastMsg) {
       this.lastMsg = msg;
-      this.sp.browser.executeJavaScript(`window.__skyrpAddChat && window.__skyrpAddChat(${JSON.stringify(msg)});`);
+      const dist = this.senderDistanceMeters(msg);
+      this.sp.browser.executeJavaScript(`window.__skyrpAddChat && window.__skyrpAddChat(${JSON.stringify(msg)}, ${dist});`);
     }
   }
 
-  // Chat bubbles over the player's head for spoken lines (/say /me /my /looc).
+  private senderDistanceMeters(raw: string): number {
+    try {
+      let s = raw;
+      const us = s.indexOf("\u001f");
+      if (us > 0 && /^[0-9]+$/.test(s.slice(0, us))) s = s.slice(us + 1);
+      if (s.indexOf("[[B") !== 0) return -1;
+      const be = s.indexOf("]]");
+      const hex = be > 3 ? s.slice(3, be) : "";
+      if (!/^[0-9a-fA-F]+$/.test(hex)) return -1;
+      const refId = parseInt(hex, 16);
+      if (!refId) return -1;
+      const sender = this.sp.ObjectReference.from(this.sp.Game.getFormEx(refId));
+      const player = this.sp.Game.getPlayer();
+      if (!sender || !player) return -1;
+      const dx = sender.getPositionX() - player.getPositionX();
+      const dy = sender.getPositionY() - player.getPositionY();
+      const dz = sender.getPositionZ() - player.getPositionZ();
+      const meters = Math.sqrt(dx * dx + dy * dy + dz * dz) / UNITS_PER_METER;
+      return Math.round(meters * 100) / 100;
+    } catch (e) {
+      return -1;
+    }
+  }
+
+  // Chat bubbles over the player's head for IC lines (/say /me /my ...).
   private showBubble(refrId: number, text: string): void {
     if (!text || !refrId) return;
     const id = this.sp.createText(-1000, -1000, text.slice(0, 100), [1, 1, 1, 1]);

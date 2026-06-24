@@ -37,12 +37,14 @@
       position: absolute;
       right: 0px;
       transition: all 0.15s ease;
-      top: 0px;
+      bottom: 0px;
       opacity: 0.8;
+      cursor: ns-resize;
       img {
         pointer-events: none;
         height: 100%;
         width: 100%;
+        transform: scaleY(-1);
       }
       &:hover, &:active {
         width: 24px;
@@ -50,6 +52,7 @@
       }
     }
     > .list {
+      position: relative;
       .chat-list {
         height: 100%;
         width: 100%;

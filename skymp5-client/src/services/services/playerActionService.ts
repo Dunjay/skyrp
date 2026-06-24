@@ -1,4 +1,5 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
+import { showSystemNotification } from "./systemNotification";
 import { CustomPacketMessage } from "../messages/customPacketMessage";
 import { MsgType } from "../../messages";
 import { FunctionInfo } from "../../lib/functionInfo";
@@ -15,7 +16,7 @@ interface PlayerAction {
   id: string;
   label: string;
   group: string;
-  tmpl: string; // '<n>' is replaced with the target's name
+  tmpl: string; // '<n>' = target's name
 }
 
 const ACTIONS: PlayerAction[] = [
@@ -190,13 +191,8 @@ export class PlayerActionService extends ClientListener {
   }
 
   private notify(text: string): void {
-    // Native UI calls throw if made straight from an input handler; defer.
     this.controller.once("update", () => {
-      try {
-        this.sp.Debug.notification(text);
-      } catch (e) {
-        // ignore
-      }
+      showSystemNotification(this.sp, text);
     });
   }
 

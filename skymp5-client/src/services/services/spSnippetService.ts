@@ -3,6 +3,7 @@ import { ConnectionMessage } from "../events/connectionMessage";
 import { FinishSpSnippetMessage } from "../messages/finishSpSnippetMessage";
 import { SpSnippetMessage } from "../messages/spSnippetMessage";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
+import { showSystemNotification } from "./systemNotification";
 
 // TODO: refactor worldViewMisc into service
 import { remoteIdToLocalId } from '../../view/worldViewMisc';
@@ -136,7 +137,7 @@ export class SpSnippetService extends ClientListener {
           if (name.trim() === "") {
             logTrace(this, "Notification will not be shown because item has no name")
           } else {
-            this.sp.Debug.notification(sign + " " + name + " (" + count + ")");
+            showSystemNotification(this.sp, sign + " " + name + " (" + count + ")");
           }
           logTrace(this, sign + " " + name + " (" + count + ")");
         }

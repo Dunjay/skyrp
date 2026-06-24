@@ -42,8 +42,8 @@
 
     // Active-channel colours mirror the in-chat message colours so the
     // selector reads as "what colour your next message will be".
-    &.channel-global.active {
-      color: #8fb7ff;
+    &.channel-system.active {
+      color: #eda841;
     }
 
     &.channel-pm.active {

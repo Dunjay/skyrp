@@ -8,7 +8,7 @@ import ChatCorner from '../../img/chat_corner.svg';
 import Settings from './settings';
 import SendButton from './sendButton';
 import ChatInput from './input';
-import Channels, { DEFAULT_CHANNEL, applyChannel, channelForMessage } from './channels';
+import Channels, { DEFAULT_CHANNEL, SYSTEM_CHANNEL, applyChannel, channelForMessage } from './channels';
 import { replaceIfMoreThan20 } from '../../utils/replaceIfMoreThan20';
 
 import './styles.scss';
@@ -55,10 +55,17 @@ const Chat = (props) => {
 
   const writtenMessage = useRef('');
   
+  // The System tab is a read-only feed of notifications — you can't type into it.
+  const isSystemTab = channel === SYSTEM_CHANNEL;
+
   const hasUnreadPersonal = window.chatMessages.some((m) => m.channel === 'personal' && !m.read);
+  const hasUnreadSystem = window.chatMessages.some((m) => m.channel === SYSTEM_CHANNEL && !m.read);
 	useEffect(() => {
 	  if (channel === 'personal') {
 		window.chatMessages.forEach((m) => { if (m.channel === 'personal') m.read = true; });
+	  }
+	  if (channel === SYSTEM_CHANNEL) {
+		window.chatMessages.forEach((m) => { if (m.channel === SYSTEM_CHANNEL) m.read = true; });
 	  }
 	}, [channel, props.messages]);
 
@@ -84,6 +91,7 @@ const Chat = (props) => {
   };
 
   const sendMessage = useCallback((text) => {
+    if (channel === SYSTEM_CHANNEL) return;
     const shout = text.match(SHOUTREGEXP);
     const shoutLen = shout
       ? shout.reduce((acc, text) => {
@@ -169,6 +177,20 @@ const Chat = (props) => {
     }
   }, [isInputHidden]);
 
+  // Behavior for T button (activate chat)
+  useEffect(() => {
+    const onBrowserFocused = () => {
+      if (isInputHidden || isSystemTab) return;
+      const el = inputRef.current;
+      if (el) {
+        el.focus();
+        setEndOfContenteditable(el);
+      }
+    };
+    window.addEventListener('skymp5-client:browserFocused', onBrowserFocused);
+    return () => window.removeEventListener('skymp5-client:browserFocused', onBrowserFocused);
+  }, [isInputHidden, isSystemTab]);
+
   useEffect(() => {
     if (window.needToScroll) window.scrollToLastMessage();
     if (inputRef !== undefined && inputRef.current !== undefined) {
@@ -238,7 +260,7 @@ const Chat = (props) => {
                    <img src={ChatCorner} />
                  </div>
               }
-              resizeHandles={['ne']}
+              resizeHandles={['se']}
               className={`list ${hideNonRP ? 'hideNonRP' : ''}`}
               id='handle'
             >
@@ -260,10 +282,10 @@ const Chat = (props) => {
             >
 			  <Channels
 			    active={channel}
-			    unread={{ personal: hasUnreadPersonal }}
+			    unread={{ personal: hasUnreadPersonal, system: hasUnreadSystem }}
 			    onSelect={(id) => {
 				  setChannel(id);
-				  if (inputRef.current) inputRef.current.focus();
+				  if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
 			    }}
 			  />
               <div className='chat-input'>
@@ -271,7 +293,8 @@ const Chat = (props) => {
                   id="chatInput"
                   className={'show'}
                   type="text"
-                  placeholder={placeholder !== undefined ? placeholder : ''}
+                  readOnly={isSystemTab}
+                  placeholder={isSystemTab ? 'System messages appear here' : (placeholder !== undefined ? placeholder : '')}
                   onChange={(value) => {
                     handleInput(value);
                     if (lastSendInputText + 1000 < Date.now()) {
@@ -286,7 +309,7 @@ const Chat = (props) => {
                   maxLines={MAX_LINES}
                 />
                 {
-                  showSendButton && <SendButton onClick={() => sendMessage(input)} />
+                  showSendButton && !isSystemTab && <SendButton onClick={() => sendMessage(input)} />
                 }
               </div>
               <div className='chat-checkboxes'>
@@ -295,13 +318,15 @@ const Chat = (props) => {
                   text={'settings'}
                   isChecked={isSettingsOpened}
                   onChange={(e) => {
-                    inputRef.current.focus();
+                    if (inputRef.current && !isSystemTab) inputRef.current.focus();
                     setSettingsOpened(e.target.checked);
                   }} />
-                { doesIncludeShout &&
+                { !isSystemTab && doesIncludeShout &&
                   <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
                 }
-                <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
+                { !isSystemTab &&
+                  <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
+                }
               </div>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
+import { showSystemNotification } from "./systemNotification";
 import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomPacketMessage } from "../messages/customPacketMessage";
 import { MsgType } from "../../messages";
@@ -155,15 +156,9 @@ export class HousingService extends ClientListener {
     this.controller.emitter.emit("sendMessage", { message, reliability: "reliable" });
   }
 
-  // Native UI calls throw if made straight from an input/packet handler; defer
-  // to the next update tick (a safe context), matching FactionService.
   private notify(text: string): void {
     this.controller.once("update", () => {
-      try {
-        this.sp.Debug.notification(text);
-      } catch (e) {
-        // ignore
-      }
+      showSystemNotification(this.sp, text);
     });
   }
 
