@@ -54,6 +54,7 @@ const store = new Store({
     isolatedGame:      true,  // play from the isolated game copy instead of skyrimPath
     gameDirPath:       '',     // legacy: pre-base-dir location of the game copy
     baseDirPath:       '',     // SkyRP base dir: MO2 root, with the game at <base>\skyrim
+    forcedDefaultsApplied: false, // server-required graphics defaults seeded once at first install
   }
 })
 
@@ -275,6 +276,42 @@ ipcMain.handle('hotkeys:save', (_e, h) => {
     return { ok: false, error: err.message }
   }
 })
+
+// ── Forced server defaults ─────────────────────────────────────────────────────
+// The server ships a couple of required defaults. We apply them once, when the
+// SkyRP install is first set up, so later tweaks in the Settings tab aren't
+// reverted on every client update:
+//   • 1080p borderless window → MO2 profile's SkyrimPrefs.ini [Display]
+//   • Wait key (T) unbound     → controlmap override (waiting is disabled here)
+function applyForcedServerDefaults(gamePath) {
+  // Graphics: force 1920x1080 borderless. ini.write preserves every other key.
+  if (!store.get('forcedDefaultsApplied')) {
+    try {
+      ini.write(skyrimPrefsPath(), {
+        Display: { 'bFull Screen': '0', 'bBorderless': '1', 'iSize W': '1920', 'iSize H': '1080' },
+      })
+      store.set('forcedDefaultsApplied', true)
+      log('[defaults] forced 1080p borderless into SkyrimPrefs.ini')
+    } catch (err) {
+      log('[defaults] could not write graphics defaults:', err.message)
+    }
+  }
+
+  // Controls: drop in a controlmap with the Wait key unbound. Only seed it when
+  // the game has no controlmap yet, so we never clobber a player's own rebinds.
+  try {
+    if (gamePath) {
+      const dest = path.join(gamePath, 'Data', 'Interface', 'Controls', 'PC', 'controlmap.txt')
+      if (!fs.existsSync(dest)) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true })
+        fs.copyFileSync(path.join(__dirname, '..', 'assets', 'controlmap.txt'), dest)
+        log('[defaults] wrote controlmap override (Wait/T unbound) to ' + dest)
+      }
+    }
+  } catch (err) {
+    log('[defaults] could not write controlmap override:', err.message)
+  }
+}
 
 // ── Folder picker ─────────────────────────────────────────────────────────────
 ipcMain.handle('dialog:openFolder', async () => {
@@ -1158,6 +1195,7 @@ async function runDirectInstall() {
   try { serverInfo = await fetchJSON(`${config.apiUrl}/api/serverinfo`) } catch {}
 
   const core = await installClientFilesCore(skyrimPath, srv, serverInfo)
+  if (core.success) applyForcedServerDefaults(skyrimPath)
   send('install:complete', core.success
     ? { success: true, upToDate: core.upToDate }
     : { success: false, error: core.error })
@@ -1222,6 +1260,7 @@ async function runMO2Install() {
     try { serverInfo = await fetchJSON(`${config.apiUrl}/api/serverinfo`) } catch {}
     mo2.ensureInstance(skyrimPath, serverInfo?.loadOrder)
     mo2.registerNxmHandler()
+    applyForcedServerDefaults(skyrimPath)
 
     // ── 2. SkyMP client files into the real Data/ ─────────────────────────────
     const core = await installClientFilesCore(skyrimPath, srv, serverInfo)

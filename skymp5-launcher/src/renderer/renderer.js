@@ -425,6 +425,16 @@ const isolatedDot       = document.getElementById('isolated-status-dot')
 const isolatedText      = document.getElementById('isolated-status-text')
 const fieldIsolated     = document.getElementById('setting-isolated-game')
 const btnCreateIsolated = document.getElementById('btn-create-isolated')
+const btnInstallMo2     = document.getElementById('btn-install-mo2')
+
+// locks install via mo2 until there's a game to manage
+function refreshDownloadModsState(st) {
+  const ready = !fieldIsolated.checked || st.ready
+  btnInstallMo2.disabled = !ready
+  btnInstallMo2.title = ready
+    ? ''
+    : 'Install the game files first, or turn off Portable Skyrim Mode in the Troubleshooting tab.'
+}
 
 async function refreshIsolatedStatus() {
   const st = await window.electronAPI.isolatedStatus()
@@ -438,6 +448,7 @@ async function refreshIsolatedStatus() {
     isolatedDot.className    = 'vortex-status-dot dot-ok'
     isolatedText.textContent = `SkyRP installed at ${st.base || st.dir}`
   }
+  refreshDownloadModsState(st)
 }
 
 btnCreateIsolated.addEventListener('click', async () => {
@@ -617,7 +628,7 @@ function startModpackInstall() {
 
   window.electronAPI.startInstall('mo2')
 }
-document.getElementById('btn-install-mo2').addEventListener('click', startModpackInstall)
+btnInstallMo2.addEventListener('click', startModpackInstall)
 
 // ── PLAY button ───────────────────────────────────────────────────────────────
 // One click does everything: verify/refresh client files, sync the load
