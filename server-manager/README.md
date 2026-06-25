@@ -64,6 +64,7 @@ or expect a long first run. Subsequent native builds are incremental (minutes).
 | `SKYRP_MO2_PROFILE` | `Default` | MO2 profile to compile |
 | `SKYRP_BUILD_DIR` | `<repo>\build` | CMake build dir; native output lands in its `dist/` |
 | `SKYRP_SKIP_NATIVE` | *(unset)* | Set to `1` to skip native (.dll/.node) builds |
+| `SKYRP_CMAKE` | *(auto)* | Path to `cmake.exe` (auto-detected: PATH → standalone → VS-bundled) |
 | `SKYRP_CMAKE_CONFIGURE_ARGS` | *(none)* | Extra flags for the first `cmake` configure |
 
 The repo path, service names, and the WS relay port/secret (from the backend

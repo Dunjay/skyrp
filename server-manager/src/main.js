@@ -38,12 +38,12 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // ── Process helpers ───────────────────────────────────────────────────────────
 
 // Run a command, streaming combined stdout/stderr to the renderer's build log.
-function runStreaming(cmd, args, cwd, label, env) {
+function runStreaming(cmd, args, cwd, label, env, shell = isWin) {
   return new Promise(resolve => {
     send('build:log', `\n$ ${label || cmd + ' ' + args.join(' ')}\n`)
     let child
     try {
-      child = spawn(cmd, args, { cwd, shell: isWin, windowsHide: true, env: { ...process.env, ...(env || {}) } })
+      child = spawn(cmd, args, { cwd, shell, windowsHide: true, env: { ...process.env, ...(env || {}) } })
     } catch (err) {
       send('build:log', `[spawn failed] ${err.message}\n`)
       return resolve({ ok: false, code: -1 })
@@ -83,17 +83,50 @@ async function ensureDeps(dir, pm, label) {
   return runStreaming(pm, args, dir, `${label}: install dependencies`)
 }
 
+let _cmakePath
+function resolveCmake() {
+  if (_cmakePath) return _cmakePath
+  const cp = require('child_process')
+  const ok = p => { try { return p && fs.existsSync(p) ? p : null } catch { return null } }
+  let found = ok(process.env.SKYRP_CMAKE)
+  if (!found) {
+    try {
+      const out = cp.execSync(isWin ? 'where cmake' : 'which cmake', { encoding: 'utf8' })
+      found = ok(out.split(/\r?\n/)[0].trim())
+    } catch {}
+  }
+  if (!found && isWin) {
+    const cands = ['C:\\Program Files\\CMake\\bin\\cmake.exe', 'C:\\Program Files (x86)\\CMake\\bin\\cmake.exe']
+    try {
+      const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'
+      if (fs.existsSync(vswhere)) {
+        const vs = cp.execSync(`"${vswhere}" -latest -products * -property installationPath`, { encoding: 'utf8' }).trim()
+        if (vs) cands.push(path.join(vs, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin', 'cmake.exe'))
+      }
+    } catch {}
+    for (const c of cands) { if (ok(c)) { found = c; break } }
+  }
+  if (found) _cmakePath = found
+  return found
+}
+
 // Compile native C++ (.dll / .node) via CMake into build/dist, overwriting the
 // old binaries. The first run configures the build dir (best-effort defaults —
 // front/tests/data/nexus are turned OFF since the native binaries don't need
 // them); if you've already run cmake there, that configuration is reused.
-// Overrides: SKYRP_CMAKE_CONFIGURE_ARGS (extra configure flags),
-// SKYRP_SKIP_NATIVE=1 (skip native builds entirely, e.g. JS-only boxes).
+// Overrides: SKYRP_CMAKE (cmake.exe path), SKYRP_CMAKE_CONFIGURE_ARGS (extra
+// configure flags), SKYRP_SKIP_NATIVE=1 (skip native builds entirely).
 async function buildNative(targets, label) {
   if (process.env.SKYRP_SKIP_NATIVE === '1') {
     send('build:log', `\n[${label}] SKYRP_SKIP_NATIVE=1 — skipping native build.\n`)
     return { ok: true, skipped: true }
   }
+  const cmake = resolveCmake()
+  if (!cmake) {
+    send('build:log', `\n[${label}] cmake not found. Install CMake (or Visual Studio / Build Tools with the "C++ CMake tools" component), or set SKYRP_CMAKE to the full path of cmake.exe.\n`)
+    return { ok: false, error: 'cmake not found — install it or set SKYRP_CMAKE (see log)' }
+  }
+  send('build:log', `\n[${label}] cmake: ${cmake}\n`)
   const buildDir = config.buildDir
   if (!fs.existsSync(path.join(buildDir, 'CMakeCache.txt'))) {
     const extra = (process.env.SKYRP_CMAKE_CONFIGURE_ARGS || '').trim()
@@ -107,14 +140,14 @@ async function buildNative(targets, label) {
       '-DPREPARE_NEXUS_ARCHIVES=OFF',
       ...(extra ? extra.split(' ').filter(Boolean) : []),
     ]
-    const cfg = await runStreaming('cmake', cfgArgs, config.repoRoot, `${label}: cmake configure`)
+    const cfg = await runStreaming(cmake, cfgArgs, config.repoRoot, `${label}: cmake configure`, undefined, false)
     if (!cfg.ok) {
-      return { ok: false, error: 'cmake configure failed — run cmake once manually in build/ (vcpkg must be bootstrapped), set SKYRP_CMAKE_CONFIGURE_ARGS, or SKYRP_SKIP_NATIVE=1' }
+      return { ok: false, error: 'cmake configure failed — vcpkg must be bootstrapped and a C++ toolchain installed; or set SKYRP_CMAKE_CONFIGURE_ARGS / SKYRP_SKIP_NATIVE=1' }
     }
   }
   const args = ['--build', buildDir, '--config', 'Release']
   for (const t of targets) args.push('--target', t)
-  const r = await runStreaming('cmake', args, config.repoRoot, `${label}: cmake build (${targets.join(', ')})`)
+  const r = await runStreaming(cmake, args, config.repoRoot, `${label}: cmake build (${targets.join(', ')})`, undefined, false)
   return r.ok ? { ok: true } : { ok: false, error: `native build failed (${targets.join(', ')}) — see log` }
 }
 
