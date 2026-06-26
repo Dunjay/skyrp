@@ -128,7 +128,13 @@ async function buildNative(targets, label) {
   }
   send('build:log', `\n[${label}] cmake: ${cmake}\n`)
   const buildDir = config.buildDir
-  if (!fs.existsSync(path.join(buildDir, 'CMakeCache.txt'))) {
+  // Configure unless the build system is fully GENERATED.
+  let generated = false
+  try {
+    generated = fs.existsSync(path.join(buildDir, 'build.ninja')) ||
+      (fs.existsSync(buildDir) && fs.readdirSync(buildDir).some(f => f.toLowerCase().endsWith('.sln')))
+  } catch {}
+  if (!generated) {
     const extra = (process.env.SKYRP_CMAKE_CONFIGURE_ARGS || '').trim()
     const cfgArgs = [
       '-B', buildDir,
