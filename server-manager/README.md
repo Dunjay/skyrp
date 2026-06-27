@@ -60,11 +60,16 @@ Each Build button is self-contained:
 **Missing prerequisites are installed automatically.** On Windows each build
 button checks for what it needs and installs anything missing with `winget`
 (the manager runs elevated): **Node.js** and **Git** for every build, plus
-**CMake**, the **MSVC C++ Build Tools** ("Desktop development with C++") and
-**yarn** when a native build is involved (the CMake build shells out to `yarn`,
-which GitHub's CI runner has preinstalled but a fresh box does not). After
+**CMake**, the **Visual Studio 2022 C++ Build Tools** ("Desktop development with
+C++") and **yarn** when a native build is involved (the CMake build shells out to
+`yarn`, which GitHub's CI runner has preinstalled but a fresh box does not).
+Native builds are **pinned to VS 2022 (v143)** — the toolchain the client is
+built and tested with on CI. Building the client DLLs with a newer Visual Studio
+(e.g. VS 18 / MSVC 14.5x) has produced binaries that **crash in-game on login**,
+so the manager installs and uses VS 2022 even when a newer VS is present.
+Override with `SKYRP_CMAKE_GENERATOR` if you really want a different one. After
 installing, PATH is refreshed from the
-registry so the new tools work without restarting the manager. The MSVC Build
+registry so the new tools work without restarting the manager. The VS Build
 Tools download is several GB, so the first native build on a clean box takes a
 while. Set `SKYRP_NO_AUTO_INSTALL=1` to opt out (you'll get a manual-install
 hint with links instead). If `winget` itself isn't available, the build stops
@@ -111,7 +116,7 @@ gamemode. Until then, commands are delivered and acknowledged but not executed.
 | `SKYRP_SKIP_NATIVE` | *(unset)* | Set to `1` to skip native (.dll/.node) builds |
 | `SKYRP_NO_AUTO_INSTALL` | *(unset)* | Set to `1` to disable auto-installing prerequisites (Node/Git/CMake/MSVC) via winget |
 | `SKYRP_CMAKE` | *(auto)* | Path to `cmake.exe` (auto-detected: PATH → standalone → VS-bundled) |
-| `SKYRP_CMAKE_GENERATOR` | `Visual Studio 17 2022` | CMake generator |
+| `SKYRP_CMAKE_GENERATOR` | *(auto: VS 2022 if present, else newest VS)* | Force a specific CMake generator |
 | `SKYRP_CMAKE_CONFIGURE_ARGS` | *(none)* | Extra flags for the first `cmake` configure |
 
 The repo path, service names, and the WS relay port/secret (from the backend

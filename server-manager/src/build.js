@@ -78,9 +78,19 @@ class Builder {
     } catch { return false }
   }
 
-  // Rebuild process.env.PATH from the machine+user registry PATH (plus common
-  // install dirs) so tools installed during this run are visible to the child
-  // processes we spawn — without needing a manager restart.
+  // Path to an installed Visual Studio 2022 (v17) with the C++ x64 toolset
+  vs2022Path() {
+    if (!isWin) return null
+    const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'
+    if (!fs.existsSync(vswhere)) return null
+    try {
+      const out = cp.execSync(
+        `"${vswhere}" -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`,
+        { encoding: 'utf8', windowsHide: true }).trim()
+      return out.split(/\r?\n/)[0].trim() || null
+    } catch { return null }
+  }
+
   refreshPath() {
     if (!isWin) return
     try {
@@ -97,16 +107,13 @@ class Builder {
   }
 
   wingetInstall(id, label, override) {
-    // `--silent` runs the installer unattended; success is verified afterwards by
-    // re-detection, so we don't gate on winget's exit code (it returns non-zero
-    // for benign cases like "reboot required").
+    // `--silent` runs the installer unattended
     const args = ['install', '--id', id, '-e', '--accept-source-agreements', '--accept-package-agreements', '--silent']
     if (override) args.push('--override', override)
     return this.run('winget', args, config.repoRoot, `install ${label}`)
   }
 
-  // Ensure the toolchain this build needs is present, installing what's missing
-  // with winget. Returns { ok } and never throws.
+  // Ensure the toolchain this build needs is present
   async ensurePrereqs({ native }) {
     if (!isWin) return { ok: true }                        // auto-install is Windows-only
     if (process.env.SKYRP_NO_AUTO_INSTALL === '1') return { ok: true }
@@ -116,10 +123,15 @@ class Builder {
     if (!this.hasCmd('git'))  missing.push({ id: 'Git.Git',           label: 'Git',         check: () => this.hasCmd('git') })
     if (native) {
       if (!this.resolveCmake()) missing.push({ id: 'Kitware.CMake', label: 'CMake', check: () => { this._cmake = undefined; return !!this.resolveCmake() } })
-      if (!this.hasMsvcCpp())   missing.push({
-        id: 'Microsoft.VisualStudio.2022.BuildTools', label: 'MSVC C++ Build Tools',
+      // Pin to VS 2022 (v143) — the CI-tested toolchain. If the user forces a
+      // different generator via SKYRP_CMAKE_GENERATOR, accept any VS C++ toolset.
+      const forcedGen = !!process.env.SKYRP_CMAKE_GENERATOR
+      const haveToolset = () => forcedGen ? this.hasMsvcCpp() : !!this.vs2022Path()
+      if (!haveToolset()) missing.push({
+        id: 'Microsoft.VisualStudio.2022.BuildTools',
+        label: forcedGen ? 'MSVC C++ Build Tools' : 'Visual Studio 2022 C++ Build Tools',
         override: '--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended',
-        check: () => this.hasMsvcCpp(),
+        check: haveToolset,
       })
     }
     if (missing.length) {
@@ -212,6 +224,9 @@ class Builder {
 
   resolveGenerator(cmake) {
     if (process.env.SKYRP_CMAKE_GENERATOR) return process.env.SKYRP_CMAKE_GENERATOR
+    // Prefer VS 2022 (v143)
+    if (this.vs2022Path()) return 'Visual Studio 17 2022'
+    // Otherwise fall back to CMake's default (newest installed VS) and warn.
     try {
       const help = cp.execSync(`"${cmake}" --help`, { encoding: 'utf8', windowsHide: true })
       let firstVs = null
@@ -219,7 +234,10 @@ class Builder {
         const m = raw.match(/(Visual Studio \d+ \d{4})/)
         if (!m) continue
         if (!firstVs) firstVs = m[1]
-        if (raw.trimStart().startsWith('*')) return m[1]   // default = newest installed VS
+        if (raw.trimStart().startsWith('*')) {
+          this.line(`[generator] warning: VS 2022 not found; using "${m[1]}". The client is tested with VS 2022 — install it (or set SKYRP_CMAKE_GENERATOR) if the build misbehaves.`)
+          return m[1]
+        }
       }
       if (firstVs) return firstVs
     } catch {}
