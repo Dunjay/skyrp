@@ -141,7 +141,11 @@ class Builder {
     // workload) actually applies when a VS Build Tools shell already exists.
     const args = ['install', '--id', id, '-e', '--accept-source-agreements', '--accept-package-agreements', '--silent']
     if (force) args.push('--force')
-    if (override) args.push('--override', override)
+    // The override is a single argument whose VALUE contains spaces. winget runs
+    // through cmd.exe (shell), which would otherwise split it into separate
+    // tokens — winget then rejects the inner switches (e.g. "--norestart"). Wrap
+    // it in quotes so the whole string reaches winget as one --override value.
+    if (override) args.push('--override', `"${override}"`)
     return this.run('winget', args, config.repoRoot, `install ${label}`)
   }
 
