@@ -60,8 +60,10 @@ Each Build button is self-contained:
 **Missing prerequisites are installed automatically.** On Windows each build
 button checks for what it needs and installs anything missing with `winget`
 (the manager runs elevated): **Node.js** and **Git** for every build, plus
-**CMake** and the **MSVC C++ Build Tools** ("Desktop development with C++") when
-a native build is involved. After installing, PATH is refreshed from the
+**CMake**, the **MSVC C++ Build Tools** ("Desktop development with C++") and
+**yarn** when a native build is involved (the CMake build shells out to `yarn`,
+which GitHub's CI runner has preinstalled but a fresh box does not). After
+installing, PATH is refreshed from the
 registry so the new tools work without restarting the manager. The MSVC Build
 Tools download is several GB, so the first native build on a clean box takes a
 while. Set `SKYRP_NO_AUTO_INSTALL=1` to opt out (you'll get a manual-install

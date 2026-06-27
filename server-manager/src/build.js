@@ -122,23 +122,50 @@ class Builder {
         check: () => this.hasMsvcCpp(),
       })
     }
-    if (missing.length === 0) return { ok: true }
+    if (missing.length) {
+      this.banner('Installing missing prerequisites')
+      if (!this.hasCmd('winget')) {
+        return { ok: false, error: `missing ${missing.map(m => m.label).join(', ')} and winget is unavailable to auto-install — install the App Installer (winget), or get them manually: Node https://nodejs.org/ , CMake https://cmake.org/download/ , VS 2022 Build Tools ("Desktop development with C++") https://aka.ms/vs/17/release/vs_BuildTools.exe . Then re-run (or set SKYRP_NO_AUTO_INSTALL=1).` }
+      }
+      this.line(`[prereqs] missing: ${missing.map(m => m.label).join(', ')} — installing with winget (MSVC Build Tools is several GB; this can take a while)…`)
+      for (const m of missing) {
+        await this.wingetInstall(m.id, m.label, m.override)
+        this.refreshPath()
+      }
+      const still = missing.filter(m => !m.check())
+      if (still.length) {
+        return { ok: false, error: `still missing after install: ${still.map(m => m.label).join(', ')} — a manager restart (or reboot) may be needed for PATH/registration to take effect. See log.` }
+      }
+      this.line('[prereqs] toolchain installed.')
+    }
 
-    this.banner('Installing missing prerequisites')
-    if (!this.hasCmd('winget')) {
-      return { ok: false, error: `missing ${missing.map(m => m.label).join(', ')} and winget is unavailable to auto-install — install the App Installer (winget), or get them manually: Node https://nodejs.org/ , CMake https://cmake.org/download/ , VS 2022 Build Tools ("Desktop development with C++") https://aka.ms/vs/17/release/vs_BuildTools.exe . Then re-run (or set SKYRP_NO_AUTO_INSTALL=1).` }
+    if (native) {
+      const y = await this.ensureYarn()
+      if (!y.ok) return y
     }
-    this.line(`[prereqs] missing: ${missing.map(m => m.label).join(', ')} — installing with winget (MSVC Build Tools is several GB; this can take a while)…`)
-    for (const m of missing) {
-      await this.wingetInstall(m.id, m.label, m.override)
-      this.refreshPath()
-    }
-    const still = missing.filter(m => !m.check())
-    if (still.length) {
-      return { ok: false, error: `still missing after install: ${still.map(m => m.label).join(', ')} — a manager restart (or reboot) may be needed for PATH/registration to take effect. See log.` }
-    }
-    this.line('[prereqs] all prerequisites present.')
     return { ok: true }
+  }
+
+  async ensureYarn() {
+    if (this.hasCmd('yarn')) return { ok: true }
+    if (!this.hasCmd('npm')) return { ok: false, error: 'yarn is required for native builds and npm is unavailable to install it — install Node.js, then yarn, and retry.' }
+    this.line('[prereqs] yarn not found — installing yarn (classic) with npm (cmake/yarn.cmake needs it)…')
+    await this.run('npm', ['install', '-g', 'yarn'], config.repoRoot, 'npm install -g yarn')
+    this.refreshPath()
+    // The npm global bin dir may not be on the registry PATH yet — add it.
+    try {
+      const prefix = cp.execSync('npm config get prefix', { encoding: 'utf8', windowsHide: true }).trim()
+      if (prefix && !(process.env.PATH || '').toLowerCase().includes(prefix.toLowerCase())) {
+        process.env.PATH = `${prefix};${process.env.PATH || ''}`
+      }
+    } catch {}
+    if (this.hasCmd('yarn')) { this.line('[prereqs] yarn installed.'); return { ok: true } }
+    if (this.hasCmd('corepack')) {
+      await this.run('corepack', ['enable'], config.repoRoot, 'corepack enable')
+      this.refreshPath()
+      if (this.hasCmd('yarn')) { this.line('[prereqs] yarn enabled via corepack.'); return { ok: true } }
+    }
+    return { ok: false, error: 'yarn is required for native builds but could not be installed — run `npm install -g yarn` in an elevated shell and retry (a manager restart may be needed for PATH).' }
   }
 
   resolveCmake() {
