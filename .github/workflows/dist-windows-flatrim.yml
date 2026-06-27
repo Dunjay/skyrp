@@ -1,0 +1,51 @@
+name: Dist Windows Flatrim (fast, dist-only)
+
+# A trimmed-down version of "PR Windows Flatrim" that produces ONLY the client
+# (`dist`) and server (`server-dist`) payloads as fast as possible. It reuses the
+# same vcpkg + NuGet-binary-cache build, but skips everything that doesn't change
+# the dist: the unit-test executable, the test suite (ctest), the Skyrim-data
+# download, coverage (OpenCppCoverage), nexus archives, and the profiling /
+# msbuild / coverage / vcpkg-log uploads.
+#
+# Run it from the Actions tab (Run workflow) when you just need fresh client/server
+# binaries to drop into the Server Manager. The full "PR Windows Flatrim" workflow
+# still runs the tests and remains the correctness gate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      skyrim_vr:
+        description: "Build for Skyrim VR (OFF = Flatrim AE/SE)"
+        type: choice
+        options: [ "OFF", "ON" ]
+        default: "OFF"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_BINARY_SOURCES: 'clear;nuget,GitHub,readwrite'
+  VCPKG_FEATURE_FLAGS: 'manifests'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: 'true'
+      - uses: ./.github/actions/pr_base
+        with:
+          DESCRIPTION: 'Flatrim'
+          SKYRIM_VR_FLAG: ${{ github.event.inputs.skyrim_vr }}
+          SP_NEXUS_ARTIFACT_NAME: nope
+          DEPLOY_BRANCH: ""
+          DIST_ARTIFACT_NAME: dist
+          SERVER_DIST_ARTIFACT_NAME: server-dist
+          SKYMP5_PATCHES_PAT: ${{ secrets.SKYMP5_PATCHES_PAT }}
+          NUGET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_TESTS: "false"
+          UPLOAD_EXTRA_ARTIFACTS: "false"
