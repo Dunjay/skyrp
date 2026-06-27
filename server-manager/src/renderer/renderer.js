@@ -69,17 +69,47 @@ function renderServices() {
     row.appendChild(sel)
     box.appendChild(row)
   }
+  const allRow = el('div', { className: 'svc-row' })
+  allRow.appendChild(el('span', { className: 'svc-name' }, 'All'))
+  allRow.appendChild(el('span', { className: 'svc-status', id: 'svc-all' }, '…'))
+  const allSel = el('select', { className: 'svc-action' })
+  allSel.appendChild(el('option', { value: '' }, 'Action…'))
+  allSel.appendChild(el('option', { value: 'start' }, 'Start all'))
+  allSel.appendChild(el('option', { value: 'stop' }, 'Stop all'))
+  allSel.appendChild(el('option', { value: 'restart' }, 'Restart all'))
+  allSel.addEventListener('change', async () => {
+    const action = allSel.value
+    allSel.value = ''
+    if (!action) return
+    allSel.disabled = true
+    appendLog(logNode, `\n--- ${action} all services ---\n`)
+    const r = await window.mgr.servicesAction(action)
+    if (r.steps) r.steps.forEach(x => appendLog(logNode, x + '\n'))
+    if (r.error) appendLog(logNode, 'error: ' + r.error + '\n')
+    if (r.status) paintStatus(r.status)
+    allSel.disabled = false
+  })
+  allRow.appendChild(allSel)
+  box.appendChild(allRow)
 }
 
 function paintStatus(st) {
+  let up = 0
   for (const s of SERVICES) {
     const node = $(`#svc-${s.key}`)
     if (!node) continue
     const raw = st[s.key] || '?'
     const running = /SERVICE_RUNNING/i.test(raw)
     const stopped = /SERVICE_STOPPED/i.test(raw)
+    if (running) up++
     node.textContent = running ? 'running' : stopped ? 'stopped' : raw.replace(/^SERVICE_/i, '').toLowerCase()
     node.className = 'svc-status ' + (running ? 'ok' : stopped ? 'bad' : 'unknown')
+  }
+  const all = $('#svc-all')
+  if (all) {
+    const total = SERVICES.length
+    all.textContent = up === total ? 'all up' : up === 0 ? 'all down' : `${up}/${total} up`
+    all.className = 'svc-status ' + (up === total ? 'ok' : up === 0 ? 'bad' : 'unknown')
   }
 }
 
