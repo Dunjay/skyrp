@@ -498,49 +498,6 @@ ipcMain.handle('game:isolatedStatus', () => ({
   base:    store.get('baseDirPath') || '',
 }))
 
-// Checks for clean directory
-function findDirtyFiles(src) {
-  const offenders = []
-  const dataDir   = path.join(src, 'Data')
-
-  try {
-    for (const name of fs.readdirSync(dataDir)) {
-      const l = name.toLowerCase()
-      if (l.startsWith('cc')) continue                       // Creation Club — official
-      if (l.endsWith('.esp')) offenders.push(`Data\\${name}`)
-      else if ((l.endsWith('.esm') || l.endsWith('.esl')) && !VANILLA_MASTERS.has(l)) {
-        offenders.push(`Data\\${name}`)
-      }
-    }
-  } catch { /* no Data dir — caught by the SkyrimSE.exe check */ }
-
-  for (const dir of ['SKSE', 'Platform']) {
-    if (fs.existsSync(path.join(dataDir, dir))) offenders.push(`Data\\${dir}\\`)
-  }
-  for (const file of ['d3d11.dll', 'dxgi.dll', 'enbseries.ini']) {
-    if (fs.existsSync(path.join(src, file))) offenders.push(file)
-  }
-
-  return offenders
-}
-
-// move CC content so it doesnt load
-function disableCreationClub(gameDir) {
-  const dataDir     = path.join(gameDir, 'Data')
-  const disabledDir = path.join(gameDir, 'DisabledCC')
-  let moved = 0
-  try {
-    for (const name of fs.readdirSync(dataDir)) {
-      if (!name.toLowerCase().startsWith('cc')) continue
-      fs.mkdirSync(disabledDir, { recursive: true })
-      fs.renameSync(path.join(dataDir, name), path.join(disabledDir, name))
-      moved++
-    }
-  } catch { /* no Data dir */ }
-  if (moved > 0) log(`[isolated] moved ${moved} Creation Club file(s) to DisabledCC\\`)
-  return moved
-}
-
 // True if either path is the same as, or nested inside, the other.
 function pathsOverlap(a, b) {
   const norm = p => path.resolve(p).replace(/[\\/]+$/, '').toLowerCase() + path.sep
@@ -554,28 +511,7 @@ ipcMain.handle('game:createIsolated', async () => {
     return { success: false, error: 'Set a valid Skyrim path first (SkyrimSE.exe not found).' }
   }
 
-  // We need a clean install to make a portable skyrim, this checks to make sure its clean
-  const offenders = findDirtyFiles(src)
-  if (offenders.length > 0) {
-    const shown = offenders.slice(0, 6).join(', ') + (offenders.length > 6 ? ', …' : '')
-    await dialog.showMessageBox(win, {
-      type: 'warning',
-      title: 'Skyrim directory is not clean',
-      message: "Warning, your Skyrim directory isn't clean.",
-      detail:
-        'To clean it, delete the entire directory and redownload it by verifying local cache.\n' +
-        'To make things quicker, you can keep the vanilla BSA files if they\'re untouched.\n\n' +
-        `Found: ${shown}`,
-      buttons: ['OK'],
-      defaultId: 0,
-    })
-    return {
-      success: false,
-      dirty:   true,
-      error:   `Your Skyrim install is not clean (found: ${shown}). ` +
-               `Please reinstall or verify Skyrim to a vanilla state, then try again.`,
-    }
-  }
+  // No clean-install check needed: copyGameDir copies only vanilla files, so a modded source is fine.
 
   // Ask where to install the modlist.
   const picked = await dialog.showOpenDialog(win, {
@@ -629,7 +565,6 @@ ipcMain.handle('game:createIsolated', async () => {
     } else {
       log('[isolated] reusing existing game copy at ' + dst)
     }
-    disableCreationClub(dst)
 
     // configuration
     let serverInfo = null
@@ -647,30 +582,68 @@ ipcMain.handle('game:createIsolated', async () => {
   }
 })
 
-// robocopy the game install; resolves { success, copied } or { success: false, error }
-function copyGameDir(src, dst) {
-  return new Promise(resolve => {
-    // robocopy: /E all subdirs, /MT multithreaded, minimal logging, one line per copied file so we can show progress.
-    const args = [src, dst, '/E', '/MT:8', '/NJH', '/NJS', '/NDL', '/NC', '/NS', '/NP']
-    const child = spawn('robocopy', args, { windowsHide: true })
+// Vanilla root runtime files, by store edition. Only those present get copied.
+const VANILLA_ROOT_FILES = ['SkyrimSE.exe', 'bink2w64.dll', 'steam_api64.dll', 'Galaxy64.dll', 'EOSSDK-Win64-Shipping.dll']
 
-    let copied = 0
-    child.stdout.on('data', chunk => {
-      const lines = chunk.toString().split(/\r?\n/).filter(l => l.trim())
-      copied += lines.length
-      // Update on every chunk — large BSAs copy slowly and infrequent updates
-      // make the launcher look frozen.
-      send('isolated:progress', `Copying game files… ${copied} files (this can take several minutes for ~16 GB)`)
-    })
+// A Data file is vanilla if it is a known master or a vanilla-named BSA (cc* excluded).
+function isVanillaDataFile(name) {
+  const l = name.toLowerCase()
+  if (l.startsWith('cc')) return false
+  if (VANILLA_MASTERS.has(l)) return true
+  if (l.endsWith('.bsa')) {
+    if (l.startsWith('skyrim - ')) return true
+    const base = l.replace(/\.bsa$/, '')
+    return base === 'skyrim' || VANILLA_MASTERS.has(`${base}.esm`) || VANILLA_MASTERS.has(`${base}.esl`)
+  }
+  return false
+}
 
-    child.on('error', err => resolve({ success: false, error: `robocopy failed: ${err.message}` }))
-    child.on('close', code => {
-      // robocopy exit codes 0–7 mean success (8+ are failures)
-      if (code >= 8) return resolve({ success: false, error: `robocopy exited with code ${code}` })
-      log(`[isolated] game copy complete (${copied} files) at ${dst}`)
-      resolve({ success: true, copied })
-    })
-  })
+// Copy only Bethesda's vanilla files from the (possibly modded) source so the user's install stays intact.
+async function copyGameDir(src, dst) {
+  const jobs = []
+  for (const name of VANILLA_ROOT_FILES) {
+    if (fs.existsSync(path.join(src, name))) jobs.push({ rel: name, sub: '' })
+  }
+  const dataDir = path.join(src, 'Data')
+  try {
+    for (const name of fs.readdirSync(dataDir)) {
+      if (isVanillaDataFile(name)) jobs.push({ rel: name, sub: 'Data' })
+    }
+  } catch { /* no Data dir; the SkyrimSE.exe check already guards the source */ }
+  try {
+    for (const name of fs.readdirSync(path.join(dataDir, 'Video'))) {
+      if (name.toLowerCase().endsWith('.bik')) jobs.push({ rel: name, sub: path.join('Data', 'Video') })
+    }
+  } catch { /* no Video folder */ }
+  try {
+    // Vanilla loose strings exist on localized installs; English keeps them in the BSAs.
+    const bases = [...VANILLA_MASTERS].map(m => m.replace(/\.es[mlp]$/, ''))
+    for (const name of fs.readdirSync(path.join(dataDir, 'Strings'))) {
+      const l = name.toLowerCase()
+      if (!l.startsWith('cc') && bases.some(b => l.startsWith(`${b}_`))) {
+        jobs.push({ rel: name, sub: path.join('Data', 'Strings') })
+      }
+    }
+  } catch { /* no Strings folder */ }
+
+  if (!jobs.some(j => j.rel.toLowerCase() === 'skyrim.esm')) {
+    return { success: false, error: 'Skyrim.esm not found in Data - is the Skyrim path correct?' }
+  }
+
+  let copied = 0
+  for (const job of jobs) {
+    const to = path.join(dst, job.sub, job.rel)
+    try {
+      fs.mkdirSync(path.dirname(to), { recursive: true })
+      await fs.promises.copyFile(path.join(src, job.sub, job.rel), to)
+    } catch (err) {
+      return { success: false, error: `Failed copying ${job.rel}: ${err.message}` }
+    }
+    copied++
+    send('isolated:progress', `Copying vanilla game files… ${copied}/${jobs.length} (${job.rel})`)
+  }
+  log(`[isolated] copied ${copied} vanilla file(s) to ${dst}`)
+  return { success: true, copied }
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
