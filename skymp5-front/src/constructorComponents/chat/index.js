@@ -298,14 +298,18 @@ const Chat = (props) => {
                               if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
                             }}
                           />
-                          <div className='chat-checkboxes'>
-                            { !isSystemTab && doesIncludeShout &&
-                              <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
-                            }
-                            { !isSystemTab &&
-                              <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
-                            }
-                          </div>
+                          <button
+                            type='button'
+                            className='chat-settings-button'
+                            title='Settings'
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              if (inputRef.current && !isSystemTab) inputRef.current.focus();
+                              setSettingsOpened((open) => !open);
+                            }}
+                          >
+                            {'⚙ Settings'}
+                          </button>
                         </div>
                         <div className='chat-input'>
                           <ChatInput
@@ -327,18 +331,14 @@ const Chat = (props) => {
                             fontSize={fontSize}
                             maxLines={MAX_LINES}
                           />
-                          <button
-                            type='button'
-                            className='chat-settings-button'
-                            title='Settings'
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              if (inputRef.current && !isSystemTab) inputRef.current.focus();
-                              setSettingsOpened((open) => !open);
-                            }}
-                          >
-                            {'⚙ Settings'}
-                          </button>
+                          <div className='chat-checkboxes'>
+                            { !isSystemTab && doesIncludeShout &&
+                              <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
+                            }
+                            { !isSystemTab &&
+                              <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
+                            }
+                          </div>
                         </div>
                       </div>
                     )
@@ -361,6 +361,12 @@ const Chat = (props) => {
           setChatTransparency={setChatTransparency}
           customHighlights={customHighlights}
           setCustomHighlights={setCustomHighlights}
+          onBack={() => {
+            setSettingsOpened(false);
+            if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) {
+              window.skyrimPlatform.sendMessage('cef::browser:unfocus');
+            }
+          }}
         />
       }
     </div>
