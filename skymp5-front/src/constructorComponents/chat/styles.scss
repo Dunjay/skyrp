@@ -123,6 +123,13 @@
       }
     }
   }
+  .chat-tabs-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
   .chat-checkboxes {
     display: flex;
     flex-direction: row;

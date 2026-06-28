@@ -85,35 +85,51 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
     };
     window.__skyrpSetNames(${JSON.stringify(name)});
 
-    function isWordChar(ch){
-      return (ch>='a'&&ch<='z')||(ch>='A'&&ch<='Z')||(ch>='0'&&ch<='9');
+    function escapeRe(s){
+      var sp='.*+?^()|[]{}$';
+      var o='';
+      for (var i=0;i<s.length;i++){ var c=s.charAt(i); o+=(sp.indexOf(c)>=0?'\\\\':'')+c; }
+      return o;
     }
-    // Re-colour any character name (whole-word, case-insensitive) to NAME.
-    function highlightNames(segs){
+    // Build highlight matchers: names (whole-word, case-insensitive) + custom words.
+    function buildTerms(){
+      var terms=[];
       var names=(window.__skyrpNames||[]).filter(function(n){ return n && n.length>1; });
-      if (!names.length) return segs;
-      names=names.slice().sort(function(a,b){ return b.length-a.length; }); // longest first
+      for (var i=0;i<names.length;i++) terms.push(new RegExp('\\\\b'+escapeRe(names[i])+'\\\\b','gi'));
+      // custom words: * wildcard, "quotes" = case-sensitive, comma/colon/newline separators.
+      var raw=String(window.__skyrpCustomHighlightsRaw||''), NL=String.fromCharCode(10);
+      var toks=raw.split(',').join(NL).split(':').join(NL).split(String.fromCharCode(13)).join(NL).split(NL);
+      for (var j=0;j<toks.length;j++){
+        var t=toks[j].trim(); if(!t) continue;
+        var ci=true;
+        if (t.length>=2 && t.charAt(0)==='"' && t.charAt(t.length-1)==='"'){ ci=false; t=t.slice(1,-1).trim(); }
+        if (!t || t.split('*').join('')===''){ continue; }
+        var parts=t.split('*');
+        for (var p=0;p<parts.length;p++) parts[p]=escapeRe(parts[p]);
+        try { terms.push(new RegExp(parts.join('[^ ]*'), ci?'gi':'g')); } catch(e){}
+      }
+      return terms;
+    }
+    // Re-colour name / custom-word matches to NAME. nohl segments are skipped.
+    function highlightNames(segs){
+      var terms=buildTerms();
+      if (!terms.length) return segs;
       var out=[];
       for (var s=0;s<segs.length;s++){
         var seg=segs[s];
-        if (seg.color===NAME){ out.push(seg); continue; }
-        var text=seg.text, low=text.toLowerCase(), pos=0;
+        if (seg.nohl || seg.color===NAME){ out.push(seg); continue; }
+        var text=seg.text, pos=0;
         while (pos<text.length){
-          var best=-1, bestLen=0;
-          for (var k=0;k<names.length;k++){
-            var nm=names[k].toLowerCase(), idx=low.indexOf(nm,pos);
-            while (idx>=0){
-              var before=idx>0?text.charAt(idx-1):' ';
-              var after=idx+nm.length<text.length?text.charAt(idx+nm.length):' ';
-              if (!isWordChar(before) && !isWordChar(after)) break;
-              idx=low.indexOf(nm,idx+1);
-            }
-            if (idx>=0 && (best===-1 || idx<best)){ best=idx; bestLen=nm.length; }
+          var best=-1, bestEnd=-1;
+          for (var k=0;k<terms.length;k++){
+            terms[k].lastIndex=pos;
+            var m=terms[k].exec(text);
+            if (m && (best===-1 || m.index<best)){ best=m.index; bestEnd=m.index+m[0].length; }
           }
           if (best===-1){ out.push({text:text.slice(pos),color:seg.color}); break; }
           if (best>pos) out.push({text:text.slice(pos,best),color:seg.color});
-          out.push({text:text.slice(best,best+bestLen),color:NAME});
-          pos=best+bestLen;
+          if (bestEnd>best){ out.push({text:text.slice(best,bestEnd),color:NAME}); pos=bestEnd; }
+          else pos=best+1;
         }
       }
       return out;
@@ -148,18 +164,19 @@ const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
       return segs;
     }
 
-    // Build the coloured segments for a line.
+    // Leading name is its own nohl segment so highlighting skips your own name.
     function fmtLine(kind, n, body){
       var ch=CH[kind], c=ch.color, f=ch.fmt;
-      if (f==='say')     return [{text:n+' says: "'+body+'"',color:c}];
-      if (f==='sayquiet')return [{text:n+' says quietly: "'+body+'"',color:c}];
-      if (f==='whisper') return [{text:n+' whispers: "'+body+'"',color:c}];
-      if (f==='sayloud') return [{text:n+' says loudly: "'+body+'"',color:c}];
-      if (f==='shout')   return [{text:n+' shouts: "'+body+'"',color:c}];
-      if (f==='me')      return [{text:n+' ',color:c}].concat(quoteSegs(body,c));
-      if (f==='my')      return [{text:n+"'s ",color:c}].concat(quoteSegs(body,c));
+      var nm={text:n,color:c,nohl:1};
+      if (f==='say')     return [nm,{text:' says: "'+body+'"',color:c}];
+      if (f==='sayquiet')return [nm,{text:' says quietly: "'+body+'"',color:c}];
+      if (f==='whisper') return [nm,{text:' whispers: "'+body+'"',color:c}];
+      if (f==='sayloud') return [nm,{text:' says loudly: "'+body+'"',color:c}];
+      if (f==='shout')   return [nm,{text:' shouts: "'+body+'"',color:c}];
+      if (f==='me')      return [nm,{text:' ',color:c}].concat(quoteSegs(body,c));
+      if (f==='my')      return [nm,{text:"'s ",color:c}].concat(quoteSegs(body,c));
       if (f==='do')      return quoteSegs(body,c);
-      if (f==='ooc')     return [{text:n+' ('+ch.oocLabel+'): "'+body+'"',color:c}];
+      if (f==='ooc')     return [nm,{text:' ('+ch.oocLabel+'): "'+body+'"',color:c}];
       return [{text:body,color:c}]; // plain: system / flavour
     }
 

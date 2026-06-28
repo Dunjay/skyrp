@@ -25,6 +25,9 @@ const Chat = (props) => {
   const [disableDiceColors, setDisableDiceColors] = useState(false);
   const [isPouchOpened, setPouchOpened] = useState(0);
   const [isSettingsOpened, setSettingsOpened] = useState(false);
+  const [lockChat, setLockChat] = useState(false);
+  const [chatTransparency, setChatTransparency] = useState(25);
+  const [customHighlights, setCustomHighlights] = useState('');
   const [channel, setChannel] = useState(DEFAULT_CHANNEL);
   const [fontSize, setFontSize] = useState(16);
   const placeholder = props.placeholder;
@@ -203,6 +206,11 @@ const Chat = (props) => {
     }
   }, [props.messages]);
 
+  // Expose the player's custom highlight words to the injected chat JS (chatService).
+  useEffect(() => {
+    window.__skyrpCustomHighlightsRaw = customHighlights;
+  }, [customHighlights]);
+
   const handleInput = (value) => {
     updateInput(value);
     const shout = value.match(SHOUTREGEXP);
@@ -250,11 +258,11 @@ const Chat = (props) => {
   };
   return (
     <div className='fullPage'>
-      <Draggable handle='.chat-drag-bar' disabled={false} bounds={'.fullPage'}>
-        <div id='chat'>
+      <Draggable handle='.chat-drag-bar' disabled={lockChat} bounds={'.fullPage'}>
+        <div id='chat' style={{ '--chat-bg-alpha': (100 - chatTransparency) / 100 }}>
           <div className="chat-main">
             <div className='chat-header'>
-              <div className='chat-drag-bar' title='Drag to move chat' />
+              {!lockChat && <div className='chat-drag-bar' title='Drag to move chat' />}
             </div>
             <ResizableBox
               width={640}
@@ -263,12 +271,12 @@ const Chat = (props) => {
               minConstraints={[320, 320]}
               axis={'both'}
               handle={
-                 !isInputHidden &&
+                 (!isInputHidden && !lockChat) &&
                  <div className='chat-corner'>
                    <img src={ChatCorner} />
                  </div>
               }
-              resizeHandles={!isInputHidden ? ['se'] : []}
+              resizeHandles={(!isInputHidden && !lockChat) ? ['se'] : []}
               className={`chat-resizable ${hideNonRP ? 'hideNonRP' : ''}`}
               id='handle'
             >
@@ -281,14 +289,24 @@ const Chat = (props) => {
                     ? <div style={{ height: '100px' }} />
                     : (
                       <div className='input'>
-                        <Channels
-                          active={channel}
-                          unread={{ personal: hasUnreadPersonal, system: hasUnreadSystem }}
-                          onSelect={(id) => {
-                            setChannel(id);
-                            if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
-                          }}
-                        />
+                        <div className='chat-tabs-row'>
+                          <Channels
+                            active={channel}
+                            unread={{ personal: hasUnreadPersonal, system: hasUnreadSystem }}
+                            onSelect={(id) => {
+                              setChannel(id);
+                              if (id !== SYSTEM_CHANNEL && inputRef.current) inputRef.current.focus();
+                            }}
+                          />
+                          <div className='chat-checkboxes'>
+                            { !isSystemTab && doesIncludeShout &&
+                              <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
+                            }
+                            { !isSystemTab &&
+                              <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
+                            }
+                          </div>
+                        </div>
                         <div className='chat-input'>
                           <ChatInput
                             id="chatInput"
@@ -322,14 +340,6 @@ const Chat = (props) => {
                             {'⚙ Settings'}
                           </button>
                         </div>
-                        <div className='chat-checkboxes'>
-                          { !isSystemTab && doesIncludeShout &&
-                            <span className={`chat-message-limit shout-limit ${shoutLength > MAX_SHOUT_LENGTH ? 'limit' : ''} text`}>{shoutLength}/{MAX_SHOUT_LENGTH}</span>
-                          }
-                          { !isSystemTab &&
-                            <span className={`chat-message-limit ${input.length > MAX_LENGTH ? 'limit' : ''} text`}>{input.length}/{MAX_LENGTH}</span>
-                          }
-                        </div>
                       </div>
                     )
                 }
@@ -345,6 +355,12 @@ const Chat = (props) => {
           setFontSize={setFontSize}
           isSoundsDisabled={disableDiceSounds}
           setDisableSounds={setDisableDiceSounds}
+          lockChat={lockChat}
+          setLockChat={setLockChat}
+          chatTransparency={chatTransparency}
+          setChatTransparency={setChatTransparency}
+          customHighlights={customHighlights}
+          setCustomHighlights={setCustomHighlights}
         />
       }
     </div>
