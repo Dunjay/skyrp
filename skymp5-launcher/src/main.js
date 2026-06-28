@@ -1244,11 +1244,20 @@ async function runDirectInstall() {
 // SSE Engine Fixes pt 2
 const ENGINE_FIXES = { modId: 17230, fileId: 725261, name: 'SSE Engine Fixes (Part 2)' }
 
+// Open the MO2 downloads folder (archive staging) + the backend page listing every file-pinned Nexus link, once per install run.
+let _downloadListOpened = false
+function openDownloadList(downloadsDir) {
+  if (_downloadListOpened) return
+  _downloadListOpened = true
+  try { fs.mkdirSync(downloadsDir, { recursive: true }); shell.openPath(downloadsDir) } catch {}
+  shell.openExternal(`${config.apiUrl}/api/nexus-downloads`)
+}
+
 /**
  * Fetch a specific Nexus file into the downloads folder and return its local
- * path. Premium accounts download via the API; free accounts get the mod page
- * opened and we wait for the nxm "Mod Manager Download". Returns null if the
- * free download never arrives.
+ * path. Premium accounts download via the API; free accounts are sent to the
+ * downloads list page and we wait for the nxm "Mod Manager Download". Returns
+ * null if the free download never arrives.
  */
 async function acquireNexusArchive(modId, fileId, displayName, { downloadsDir, apiKey, premium }) {
   const mb = n => (n / 1024 / 1024).toFixed(1)
@@ -1263,8 +1272,8 @@ async function acquireNexusArchive(modId, fileId, displayName, { downloadsDir, a
     return path.join(downloadsDir, name)
   }
 
-  shell.openExternal(`https://www.nexusmods.com/skyrimspecialedition/mods/${modId}?tab=files`)
-  send('install:progress', { phase: 'mods', file: `Open ${displayName} and click "Mod Manager Download"`, index: 0, total: 1, skipped: false })
+  openDownloadList(downloadsDir)
+  send('install:progress', { phase: 'mods', file: `Find ${displayName} on the downloads list, click "Mod Manager Download"; it stages in the MO2 downloads folder`, index: 0, total: 1, skipped: false })
   await mo2.waitForDownloads([{ fileId, name: displayName }], (d, t, msg) =>
     send('install:progress', { phase: 'mods', file: msg, index: d, total: t, skipped: false }))
   name = mo2.findDownloadByFileId(fileId)
@@ -1278,6 +1287,7 @@ async function acquireNexusArchive(modId, fileId, displayName, { downloadsDir, a
 // gets the reference install's exact, byte-identical layout.
 
 async function runMO2Install() {
+  _downloadListOpened = false
   const fail = (msg) => {
     log('[mo2-install] ABORT:', msg)
     send('install:complete', { success: false, error: msg })
@@ -1402,16 +1412,12 @@ async function runMO2Install() {
       }
     }
 
-    // ── 3b. Free / no-key path: open Nexus pages and wait for nxm downloads ──
+    // ── 3b. Free / no-key path: open the downloads list page + MO2 staging folder ──
     if (needBrowser.length > 0) {
-      for (const a of needBrowser) {
-        shell.openExternal(`https://www.nexusmods.com/skyrimspecialedition/mods/${a.source.modId}?tab=files`)
-        await new Promise(r => setTimeout(r, 800))
-      }
+      openDownloadList(downloadsDir)
       send('install:progress', {
         phase: 'mods',
-        file:  `Opened ${needBrowser.length} Nexus page(s) — click "Mod Manager Download" on each` +
-               (apiKey ? '' : ' (log into Nexus in the launcher for automatic downloads)'),
+        file:  'Opened the downloads list: Ctrl+click each link (about 5 at a time) and click "Mod Manager Download". Archives stage in the MO2 downloads folder.',
         index: 0, total: needBrowser.length, skipped: false,
       })
       await mo2.waitForDownloads(needBrowser.map(a => ({ fileId: a.source.fileId, name: a.name })), (done, total, message) => {
