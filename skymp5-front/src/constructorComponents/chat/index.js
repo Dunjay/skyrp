@@ -17,16 +17,22 @@ const MAX_HISTORY_LENGTH = 20;
 
 const SHOUTREGEXP = /№(.*?)№/gi;
 
-// Chat settings persisted across sessions in localStorage (like the login form):
-// font size, transparency, lock, dice sounds, highlight words, window position/size.
-const CHAT_SETTINGS_KEY = 'skyrp.chatSettings';
+// Chat settings persist across sessions: font size, transparency, lock, dice
+// sounds, highlight words, window position/size. The client injects the saved
+// values into window.__skyrpChatSettings on mount and writes changes to a file
+// under Data/Platform (localStorage and the CEF cache do not survive a relaunch).
 const loadChatSettings = () => {
-  try { return JSON.parse(window.localStorage.getItem(CHAT_SETTINGS_KEY) || '{}') || {}; }
+  try { return window.__skyrpChatSettings || {}; }
   catch (e) { return {}; }
 };
 const persistChatSettings = (patch) => {
-  try { window.localStorage.setItem(CHAT_SETTINGS_KEY, JSON.stringify(Object.assign(loadChatSettings(), patch))); }
-  catch (e) {}
+  try {
+    const next = Object.assign(loadChatSettings(), patch);
+    window.__skyrpChatSettings = next;
+    if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) {
+      window.skyrimPlatform.sendMessage('cef::chat:saveSettings', JSON.stringify(next));
+    }
+  } catch (e) {}
 };
 
 const Chat = (props) => {

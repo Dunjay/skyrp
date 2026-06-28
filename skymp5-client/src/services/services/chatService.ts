@@ -10,13 +10,17 @@ const CHAT_MSG_PROP = 'ff_chatMsg';
 // Skyrim world units per meter ~69.99.
 const UNITS_PER_METER = 70;
 
-const buildMountJs = (name: string, isAdmin: boolean) => `(function(){
+const buildMountJs = (name: string, isAdmin: boolean, settingsJson: string) => `(function(){
   try {
     if (window.__skyrpChatReady) return;
     if (!window.skyrimPlatform || !window.skyrimPlatform.widgets) return;
     window.__skyrpChatReady = true;
     window.__skyrpAdmin = ${isAdmin ? 'true' : 'false'};
     if (!window.chatMessages) window.chatMessages = [];
+
+    // Restore saved settings before the widget mounts so the UI seeds from them.
+    window.__skyrpChatSettings = ${settingsJson};
+    if (window.__skyrpChatSettings && window.__skyrpChatSettings.customHighlights != null) window.__skyrpCustomHighlightsRaw = window.__skyrpChatSettings.customHighlights;
 
     // Force the chat to the upper-left corner.
     if (!document.getElementById('skyrpChatCss')) {
@@ -325,6 +329,10 @@ export class ChatService extends ClientListener {
       this.showBubble(Number(e.arguments[1] ?? 0), String(e.arguments[2] ?? ""));
       return;
     }
+    if (e.arguments[0] === "cef::chat:saveSettings") {
+      this.writeChatSettings(String(e.arguments[1] ?? ""));
+      return;
+    }
     if (e.arguments[0] === "cef::chat:send") {
       const text = String(e.arguments[1] ?? "");
       if (!text) return;
@@ -333,6 +341,35 @@ export class ChatService extends ClientListener {
         reliability: "reliable",
       });
     }
+  }
+
+  // Read saved settings, returning a validated JSON object literal string or "{}".
+  private readChatSettings(): string {
+    try {
+      // @ts-expect-error (TODO: Remove in 2.10.0)
+      const data = this.sp.getPluginSourceCode(this.pluginChatSettingsName, "PluginsNoLoad");
+      if (!data) return "{}";
+      const parsed = JSON.parse(data.slice(2));
+      if (!parsed || typeof parsed !== "object") return "{}";
+      return JSON.stringify(parsed);
+    } catch (e) {
+      return "{}";
+    }
+  }
+
+  // Persist settings sent from the chat UI to disk so they survive a relaunch.
+  private writeChatSettings(json: string): void {
+    if (!json) return;
+    try {
+      const parsed = JSON.parse(json);
+      if (!parsed || typeof parsed !== "object") return;
+      this.sp.writePlugin(
+        this.pluginChatSettingsName,
+        "//" + JSON.stringify(parsed),
+        // @ts-expect-error (TODO: Remove in 2.10.0)
+        "PluginsNoLoad"
+      );
+    } catch (e) {}
   }
 
   private onUpdate(): void {
@@ -349,7 +386,7 @@ export class ChatService extends ClientListener {
       const name = appearance?.name || "You";
       const isAdmin = owner["isAdmin"] === true;
       logTrace(this, "Mounting chat widget (local parse + render)");
-      this.sp.browser.executeJavaScript(buildMountJs(name, isAdmin));
+      this.sp.browser.executeJavaScript(buildMountJs(name, isAdmin, this.readChatSettings()));
       this.sp.browser.setVisible(true);
     }
 
@@ -415,4 +452,5 @@ export class ChatService extends ClientListener {
   private lastMsg: string | null = null;
   private lastName: string | null = null;
   private bubbles: { id: number; expiresAt: number }[] = [];
+  private readonly pluginChatSettingsName = "chat-settings-no-load";
 }
