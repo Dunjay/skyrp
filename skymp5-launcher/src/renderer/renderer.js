@@ -809,8 +809,12 @@ const badgeLabel   = document.getElementById('badge-label')
 const badgePlayers = document.getElementById('badge-players')
 const footerPlayers = document.getElementById('footer-players')
 
+// track reachability so we can resync the one-shot panels when the backend returns
+let backendWasReachable = null
+
 async function checkServerStatus() {
   const data = await window.electronAPI.fetchStatus()
+  const backendUp = !!(data && data.ok)   // drives the reconnect resync below
   if (!data || !data.ok || data.status !== 'online') {
     badgeStatus.classList.remove('online')
     badgeLabel.textContent = 'OFFLINE'
@@ -828,6 +832,20 @@ async function checkServerStatus() {
       footerPlayers.textContent = '—'
     }
   }
+
+  // resync only when the backend goes offline then back online; skip the first poll
+  if (backendUp && backendWasReachable === false) {
+    refreshServerData()
+  }
+  backendWasReachable = backendUp
+}
+
+// re-pull panels that only load at startup; player count already polls itself
+function refreshServerData() {
+  loadNews()
+  loadModlist()
+  loadServerInfo()
+  refreshPlayState()   // client version + update availability
 }
 
 // ── Server info strip ─────────────────────────────────────────────────────────

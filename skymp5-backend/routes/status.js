@@ -60,20 +60,28 @@ function fetchPlayerCount(host, uiPort) {
   })
 }
 
+// server heartbeats every ~5s; allow a few misses before calling it offline
+const HEARTBEAT_TTL_MS = 20_000
+
 router.get('/', async (_req, res) => {
   const { skyrimServerHost: host, skyrimServerPort: gamePort, skympUiPort: uiPort } = config
-  const reachable = await udpCheck(host, gamePort)
+  const hb = getHeartbeat()
 
-  // Player count: prefer the heartbeat the game server pushes every ~5s
-  // (POST /api/servers/:key → { online }); it needs no metrics port or auth.
-  // Fall back to the Prometheus /metrics endpoint only if no heartbeat exists.
+  // a fresh heartbeat proves the server process is up; fall back to UDP only if none seen
+  let online
+  if (hb && hb.lastSeen) {
+    online = (Date.now() - new Date(hb.lastSeen).getTime()) < HEARTBEAT_TTL_MS
+  } else {
+    online = await udpCheck(host, gamePort)
+  }
+
+  // player count from the heartbeat, else from Prometheus /metrics
   let players = null
-  if (reachable) {
-    const hb = getHeartbeat()
+  if (online) {
     players = (hb && typeof hb.online === 'number') ? hb.online : await fetchPlayerCount(host, uiPort)
   }
 
-  res.json({ status: reachable ? 'online' : 'offline', players })
+  res.json({ status: online ? 'online' : 'offline', players })
 })
 
 module.exports = router
