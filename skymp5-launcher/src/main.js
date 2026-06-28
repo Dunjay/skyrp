@@ -571,6 +571,7 @@ ipcMain.handle('game:createIsolated', async () => {
     try { serverInfo = await fetchJSON(`${config.apiUrl}/api/serverinfo`) } catch {}
     mo2.ensureInstance(dst, serverInfo?.loadOrder)
     mo2.registerNxmHandler()
+    seedProfilePrefs(src)
 
     store.set('isolatedGame', true)
     store.set('mo2Enabled', true)
@@ -582,8 +583,16 @@ ipcMain.handle('game:createIsolated', async () => {
   }
 })
 
-// Vanilla root runtime files, by store edition. Only those present get copied.
-const VANILLA_ROOT_FILES = ['SkyrimSE.exe', 'bink2w64.dll', 'steam_api64.dll', 'Galaxy64.dll', 'EOSSDK-Win64-Shipping.dll']
+// Vanilla root files, by store edition. Only those present get copied.
+const VANILLA_ROOT_FILES = [
+  'SkyrimSE.exe', 'SkyrimSELauncher.exe', 'bink2w64.dll',
+  'steam_api64.dll', 'Galaxy64.dll', 'EOSSDK-Win64-Shipping.dll',
+  'High.ini', 'Medium.ini', 'Low.ini', 'Ultra.ini', 'Skyrim_Default.ini',
+  'Skyrim.ccc', 'installscript.vdf',
+]
+
+// Vanilla BSAs the engine loads without a matching plugin (cc* still excluded).
+const VANILLA_STANDALONE_BSAS = new Set(['marketplacetextures.bsa', '_resourcepack.bsa'])
 
 // A Data file is vanilla if it is a known master or a vanilla-named BSA (cc* excluded).
 function isVanillaDataFile(name) {
@@ -591,7 +600,7 @@ function isVanillaDataFile(name) {
   if (l.startsWith('cc')) return false
   if (VANILLA_MASTERS.has(l)) return true
   if (l.endsWith('.bsa')) {
-    if (l.startsWith('skyrim - ')) return true
+    if (l.startsWith('skyrim - ') || VANILLA_STANDALONE_BSAS.has(l)) return true
     const base = l.replace(/\.bsa$/, '')
     return base === 'skyrim' || VANILLA_MASTERS.has(`${base}.esm`) || VANILLA_MASTERS.has(`${base}.esl`)
   }
@@ -606,22 +615,22 @@ async function copyGameDir(src, dst) {
   }
   const dataDir = path.join(src, 'Data')
   try {
-    for (const name of fs.readdirSync(dataDir)) {
-      if (isVanillaDataFile(name)) jobs.push({ rel: name, sub: 'Data' })
+    for (const e of fs.readdirSync(dataDir, { withFileTypes: true })) {
+      if (e.isFile() && isVanillaDataFile(e.name)) jobs.push({ rel: e.name, sub: 'Data' })
     }
   } catch { /* no Data dir; the SkyrimSE.exe check already guards the source */ }
   try {
-    for (const name of fs.readdirSync(path.join(dataDir, 'Video'))) {
-      if (name.toLowerCase().endsWith('.bik')) jobs.push({ rel: name, sub: path.join('Data', 'Video') })
+    for (const e of fs.readdirSync(path.join(dataDir, 'Video'), { withFileTypes: true })) {
+      if (e.isFile()) jobs.push({ rel: e.name, sub: path.join('Data', 'Video') })
     }
   } catch { /* no Video folder */ }
   try {
     // Vanilla loose strings exist on localized installs; English keeps them in the BSAs.
     const bases = [...VANILLA_MASTERS].map(m => m.replace(/\.es[mlp]$/, ''))
-    for (const name of fs.readdirSync(path.join(dataDir, 'Strings'))) {
-      const l = name.toLowerCase()
-      if (!l.startsWith('cc') && bases.some(b => l.startsWith(`${b}_`))) {
-        jobs.push({ rel: name, sub: path.join('Data', 'Strings') })
+    for (const e of fs.readdirSync(path.join(dataDir, 'Strings'), { withFileTypes: true })) {
+      const l = e.name.toLowerCase()
+      if (e.isFile() && !l.startsWith('cc') && bases.some(b => l.startsWith(`${b}_`))) {
+        jobs.push({ rel: e.name, sub: path.join('Data', 'Strings') })
       }
     }
   } catch { /* no Strings folder */ }
@@ -644,6 +653,28 @@ async function copyGameDir(src, dst) {
   }
   log(`[isolated] copied ${copied} vanilla file(s) to ${dst}`)
   return { success: true, copied }
+}
+
+// Seed the MO2 profile SkyrimPrefs.ini from the player's prefs; forced 1080p/borderless merges on top later.
+function seedProfilePrefs(skyrimPath) {
+  const dest = path.join(mo2.getProfileDir(), 'skyrimprefs.ini')
+  if (fs.existsSync(dest)) return
+  const candidates = [
+    path.join(skyrimPath, 'Skyrim', 'SkyrimPrefs.ini'),
+    path.join(app.getPath('documents'), 'My Games', 'Skyrim Special Edition', 'SkyrimPrefs.ini'),
+  ]
+  for (const from of candidates) {
+    if (!fs.existsSync(from)) continue
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.copyFileSync(from, dest)
+      log(`[isolated] seeded profile SkyrimPrefs.ini from ${from}`)
+    } catch (err) {
+      log(`[isolated] could not seed SkyrimPrefs.ini: ${err.message}`)
+    }
+    return
+  }
+  log('[isolated] no source SkyrimPrefs.ini found to seed')
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
