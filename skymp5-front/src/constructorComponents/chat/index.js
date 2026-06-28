@@ -17,19 +17,36 @@ const MAX_HISTORY_LENGTH = 20;
 
 const SHOUTREGEXP = /№(.*?)№/gi;
 
+// Chat settings persisted across sessions in localStorage (like the login form):
+// font size, transparency, lock, dice sounds, highlight words, window position/size.
+const CHAT_SETTINGS_KEY = 'skyrp.chatSettings';
+const loadChatSettings = () => {
+  try { return JSON.parse(window.localStorage.getItem(CHAT_SETTINGS_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+};
+const persistChatSettings = (patch) => {
+  try { window.localStorage.setItem(CHAT_SETTINGS_KEY, JSON.stringify(Object.assign(loadChatSettings(), patch))); }
+  catch (e) {}
+};
+
 const Chat = (props) => {
+  // Load the persisted settings once; used to seed the state below.
+  const savedRef = useRef();
+  if (savedRef.current === undefined) savedRef.current = loadChatSettings();
+  const saved = savedRef.current;
+
   const [input, updateInput] = useState('');
   const [isInputFocus, changeInputFocus] = useState(false);
   const [hideNonRP, changeNonRPHide] = useState(false);
-  const [disableDiceSounds, setDisableDiceSounds] = useState(false);
+  const [disableDiceSounds, setDisableDiceSounds] = useState(saved.disableDiceSounds != null ? saved.disableDiceSounds : false);
   const [disableDiceColors, setDisableDiceColors] = useState(false);
   const [isPouchOpened, setPouchOpened] = useState(0);
   const [isSettingsOpened, setSettingsOpened] = useState(false);
-  const [lockChat, setLockChat] = useState(false);
-  const [chatTransparency, setChatTransparency] = useState(25);
-  const [customHighlights, setCustomHighlights] = useState('');
+  const [lockChat, setLockChat] = useState(saved.lockChat != null ? saved.lockChat : false);
+  const [chatTransparency, setChatTransparency] = useState(saved.chatTransparency != null ? saved.chatTransparency : 25);
+  const [customHighlights, setCustomHighlights] = useState(saved.customHighlights != null ? saved.customHighlights : '');
   const [channel, setChannel] = useState(DEFAULT_CHANNEL);
-  const [fontSize, setFontSize] = useState(16);
+  const [fontSize, setFontSize] = useState(saved.fontSize != null ? saved.fontSize : 16);
   const placeholder = props.placeholder;
   const isInputHidden = props.isInputHidden;
   const send = props.send;
@@ -214,6 +231,11 @@ const Chat = (props) => {
     window.__skyrpCustomHighlightsRaw = customHighlights;
   }, [customHighlights]);
 
+  // Persist the settings whenever they change so they survive a relaunch.
+  useEffect(() => {
+    persistChatSettings({ fontSize, chatTransparency, lockChat, disableDiceSounds, customHighlights });
+  }, [fontSize, chatTransparency, lockChat, disableDiceSounds, customHighlights]);
+
   const handleInput = (value) => {
     updateInput(value);
     const shout = value.match(SHOUTREGEXP);
@@ -261,18 +283,25 @@ const Chat = (props) => {
   };
   return (
     <div className='fullPage'>
-      <Draggable handle='.chat-drag-bar' disabled={lockChat} bounds={'.fullPage'}>
+      <Draggable
+        handle='.chat-drag-bar'
+        disabled={lockChat}
+        bounds={'.fullPage'}
+        defaultPosition={saved.pos || undefined}
+        onStop={(e, data) => persistChatSettings({ pos: { x: data.x, y: data.y } })}
+      >
         <div id='chat' style={{ '--chat-bg-alpha': (100 - chatTransparency) / 100 }}>
           <div className="chat-main">
             <div className='chat-header'>
               {!lockChat && <div className='chat-drag-bar' title='Drag to move chat' />}
             </div>
             <ResizableBox
-              width={640}
-              height={320}
+              width={saved.width != null ? saved.width : 640}
+              height={saved.height != null ? saved.height : 320}
               maxConstraints={[1000, 1100]}
               minConstraints={[320, 320]}
               axis={'both'}
+              onResizeStop={(e, data) => persistChatSettings({ width: data.size.width, height: data.size.height })}
               handle={
                  (!isInputHidden && !lockChat) &&
                  <div className='chat-corner'>
