@@ -191,9 +191,45 @@ class Builder {
     return { ok: true, out: config.paths.launcherOut }
   }
 
-  // CLIENT: package the CI-built client files (build/dist/client) into the
-  // launcher's redistributable — skymp-client.zip + data/files-version.json.
-  // The .dll/.js client binaries are compiled by CI; this only zips them.
+  // FRONT-END: rebuild the chat/UI webpack bundle into build/dist/client. webpack
+  // reads skymp5-front/config.js (gitignored) for its output path, so we write it
+  // to target the client dist's Data/Platform/UI folder.
+  async buildFront() {
+    this.banner('Front-end UI')
+    const dir = config.paths.front
+    const uiOut = path.join(config.paths.clientOut, 'Data', 'Platform', 'UI')
+    try {
+      fs.writeFileSync(path.join(dir, 'config.js'), `module.exports = { outputPath: ${JSON.stringify(uiOut)} };\n`)
+    } catch (err) {
+      return { ok: false, error: `front-end: could not write config.js (${err.message})` }
+    }
+    const dep = await this.ensureDeps(dir, 'front-end')
+    if (!dep.ok) return dep
+    const pm = this.packageManager()
+    const r = await this.run(pm, pm === 'yarn' ? ['build'] : ['run', 'build'], dir, 'front-end: webpack build')
+    if (!r.ok) return { ok: false, error: 'front-end build failed (see log)' }
+    this.line(`\n✓ Front-end UI built into ${uiOut}`)
+    return { ok: true }
+  }
+
+  // CLIENT LOGIC: rebuild skymp5-client.js into build/dist/client. Its webpack
+  // config already targets Data/Platform/Plugins, so no output wiring is needed.
+  async buildClientLogic() {
+    this.banner('Client logic (skymp5-client.js)')
+    const dir = config.paths.client
+    const dep = await this.ensureDeps(dir, 'client logic')
+    if (!dep.ok) return dep
+    const pm = this.packageManager()
+    const r = await this.run(pm, pm === 'yarn' ? ['build'] : ['run', 'build'], dir, 'client logic: webpack build')
+    if (!r.ok) return { ok: false, error: 'client logic build failed (see log)' }
+    this.line('\n✓ skymp5-client.js built into build/dist/client/Data/Platform/Plugins.')
+    return { ok: true }
+  }
+
+  // CLIENT: rebuild the client-side JS (front-end UI + skymp5-client.js) into
+  // build/dist/client, then package the client files into the launcher's
+  // redistributable (skymp-client.zip + data/files-version.json). The native
+  // .dll binaries still come prebuilt from CI.
   async buildClient() {
     this.banner('Client')
     const pre = await this.ensurePrereqs()
@@ -203,6 +239,13 @@ class Builder {
     if (!fs.existsSync(clientData)) {
       return { ok: false, error: `client build output not found at ${clientData} — download the CI "dist" artifact (PR Windows Flatrim workflow) and extract it into build/dist/client, then Build again.` }
     }
+
+    // Rebuild the client-side JS before packaging so the launcher ships the latest
+    // UI and client logic. The native .dll is left as-is (it comes from CI).
+    const front = await this.buildFront()
+    if (!front.ok) return front
+    const logic = await this.buildClientLogic()
+    if (!logic.ok) return logic
 
     // populate-files.js copies build/dist/client/Data into the backend file bucket,
     // merge-files.js builds skymp-client.zip + data/files-version.json (version from
