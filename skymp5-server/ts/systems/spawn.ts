@@ -135,10 +135,16 @@ export class Spawn implements System {
     return slots;
   }
 
+  private isPermaDead(mp: Mp, actorId: number): boolean {
+    try { return mp.get(actorId, "private.permaDead") === true; }
+    catch { return false; }
+  }
+
   private sendCharacterList(ctx: SystemContext, userId: number, profileId: number): void {
+    const mp = ctx.svr as unknown as Mp;
     const characters = this.slotMap(ctx, profileId).map((actorId, i) =>
       actorId !== undefined
-        ? { name: this.characterName(ctx, actorId) || `Character ${i + 1}` }
+        ? { name: this.characterName(ctx, actorId) || `Character ${i + 1}`, dead: this.isPermaDead(mp, actorId) }
         : null);
     ctx.svr.sendCustomPacket(userId, JSON.stringify({
       customPacketType: "characterSelectMenu", maxCharacters: MAX_CHARACTERS, characters,
@@ -153,6 +159,14 @@ export class Spawn implements System {
     const slots = this.slotMap(ctx, auth.profileId);
     let actorId = slots[slot];
     const isNew = actorId === undefined;
+
+    // Permanently dead characters are locked: their body remains in the world
+    // but they can never be played again.
+    if (!isNew && actorId !== undefined && this.isPermaDead(mp, actorId)) {
+      this.log("Refusing to play permanently dead character", actorId.toString(16), "in slot", slot);
+      this.sendCharacterList(ctx, userId, auth.profileId);
+      return;
+    }
 
     if (isNew) {
       const { startPoints } = this.settingsObject;
@@ -187,8 +201,12 @@ export class Spawn implements System {
 
     const actorId = this.slotMap(ctx, auth.profileId)[slot];
     if (actorId !== undefined) {
-      ctx.svr.destroyActor(actorId);
-      this.log("Deleted character", actorId.toString(16), "from slot", slot);
+      if (this.isPermaDead(ctx.svr as unknown as Mp, actorId)) {
+        this.log("Refusing to delete permanently dead character", actorId.toString(16));
+      } else {
+        ctx.svr.destroyActor(actorId);
+        this.log("Deleted character", actorId.toString(16), "from slot", slot);
+      }
     }
     this.sendCharacterList(ctx, userId, auth.profileId);
   }

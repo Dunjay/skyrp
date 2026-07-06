@@ -1468,7 +1468,12 @@ LocationalData MpActor::GetSpawnPoint() const
 
 LocationalData MpActor::GetRespawnPosition() const
 {
-  if (IsCreatedAsPlayer()) {
+  // A spawn point chosen by the gamemode (SetSpawnPoint / the "spawnPoint"
+  // property) always wins — the gamemode owns respawn routing and updating it
+  // must never require a native rebuild. The nearest-temple table is only the
+  // engine fallback for player characters whose spawn point was never set.
+  if (IsCreatedAsPlayer() &&
+      ChangeForm().spawnPoint == MpChangeForm::DefaultSpawnPoint()) {
     return TempleRespawn::GetNearestTemple(GetPos()).destination;
   }
   return GetSpawnPoint();

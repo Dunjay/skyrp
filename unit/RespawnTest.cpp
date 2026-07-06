@@ -77,12 +77,12 @@ TEST_CASE("DeathState packed is correct if actor is respawning", "[Respawn]")
   REQUIRE(teleportMsg["t"] == MsgType::Teleport);
   REQUIRE(changeValuesMsg["t"] == MsgType::ChangeValues);
 
-  // The player is teleported to the Whiterun temple, not back to where they
-  // died.
+  // The player is teleported INSIDE the Whiterun temple (interior cell), not
+  // back to where they died and not to an exterior spot.
   REQUIRE(teleportMsg["pos"][0] == temple.destination.pos[0]);
   REQUIRE(teleportMsg["pos"][1] == temple.destination.pos[1]);
   REQUIRE(teleportMsg["pos"][2] == temple.destination.pos[2]);
-  REQUIRE(teleportMsg["worldOrCell"] == 0x3c);
+  REQUIRE(teleportMsg["worldOrCell"] == 0x165a7); // Temple of Kynareth
 
   REQUIRE(ac.GetPos() == temple.destination.pos);
 
@@ -108,27 +108,57 @@ TEST_CASE("DeathState packed is correct if actor is respawning", "[Respawn]")
   REQUIRE(foundIsDeadBroadcast);
 }
 
+TEST_CASE("A gamemode-set spawn point wins over the temple fallback",
+          "[Respawn]")
+{
+  PartOne& p = GetPartOne();
+  DoConnect(p, 0);
+  p.CreateActor(0xff000000, { 0, 0, 0 }, 0, 0x3c);
+  p.SetUserActor(0, 0xff000000);
+  auto& ac = p.worldState.GetFormAt<MpActor>(0xff000000);
+
+  // The gamemode owns respawn routing: once it sets a spawn point (as the
+  // roleplay gamemode does on every death), the engine must respawn there and
+  // NOT override it with the built-in temple table. This is what keeps
+  // gamemode coordinate updates from requiring a native rebuild.
+  const LocationalData gamemodeChosen{ { 100.f, 200.f, 300.f },
+                                       { 0.f, 0.f, 90.f },
+                                       FormDesc::Tamriel() };
+  ac.SetSpawnPoint(gamemodeChosen);
+
+  ac.SetPos({ 20000.f, 0.f, 0.f }); // near Whiterun; fallback would say temple
+  ac.SetCellOrWorld(FormDesc::Tamriel());
+
+  ac.Kill();
+  ac.Respawn();
+
+  REQUIRE(ac.IsDead() == false);
+  REQUIRE(ac.GetPos() == gamemodeChosen.pos);
+}
+
 TEST_CASE("Nearest temple routing covers every hold", "[Respawn]")
 {
   using namespace TempleRespawn;
 
-  // Every hold's own anchor resolves to itself: the table has no two anchors
-  // that collide.
+  // Every anchor resolves to itself: the table has no two anchors that
+  // collide.
   for (const auto& temple : GetTemples()) {
     REQUIRE(std::string(GetNearestTemple(temple.anchor).name) == temple.name);
   }
 
-  const NiPoint3 windhelmPos(131512.f, 38458.f, -12522.f);
-  const NiPoint3 solitudePos(-58661.f, 110698.f, -7744.f);
+  const NiPoint3 windhelmInterior(0.f, -2800.f, 64.35f);
+  const NiPoint3 solitudeInterior(1676.93f, 1571.19f, 0.f);
+  const NiPoint3 whiterunInterior(223.24f, 248.85f, 54.f);
+  const NiPoint3 riftenInterior(-1414.34f, 208.64f, 64.f);
 
   // Temple-less holds route to a neighbouring temple per the design:
   //   Winterhold & Dawnstar -> Windhelm, Morthal -> Solitude.
-  REQUIRE(GetNearestTemple(NiPoint3(4000.f, 130000.f, 0.f)).destination.pos ==
-          windhelmPos);
-  REQUIRE(GetNearestTemple(NiPoint3(130000.f, 123000.f, 0.f)).destination.pos ==
-          windhelmPos);
-  REQUIRE(GetNearestTemple(NiPoint3(-32000.f, 92000.f, 0.f)).destination.pos ==
-          solitudePos);
+  REQUIRE(GetNearestTemple(NiPoint3(26328.f, 101092.f, 0.f)).destination.pos ==
+          windhelmInterior);
+  REQUIRE(GetNearestTemple(NiPoint3(114050.f, 94006.f, 0.f)).destination.pos ==
+          windhelmInterior);
+  REQUIRE(GetNearestTemple(NiPoint3(-39547.f, 70770.f, 0.f)).destination.pos ==
+          solitudeInterior);
 
   // A death out in a temple hold resolves to that hold's own temple.
   REQUIRE(std::string(GetNearestTemple(NiPoint3(20000.f, 0.f, 0.f)).name) ==
@@ -139,6 +169,18 @@ TEST_CASE("Nearest temple routing covers every hold", "[Respawn]")
   REQUIRE(std::string(
             GetNearestTemple(NiPoint3(-170000.f, 4000.f, 0.f)).name) ==
           "Markarth");
+
+  // Settlement anchors keep villages routed to their hold's temple.
+  REQUIRE(GetNearestTemple(NiPoint3(19233.f, -46721.f, 0.f)).destination.pos ==
+          whiterunInterior); // Riverwood
+  REQUIRE(GetNearestTemple(NiPoint3(78291.f, -67062.f, 0.f)).destination.pos ==
+          riftenInterior); // Ivarstead
+  REQUIRE(
+    GetNearestTemple(NiPoint3(-100811.f, 80907.f, 0.f)).destination.pos ==
+    solitudeInterior); // Dragon's Bridge
+  REQUIRE(
+    GetNearestTemple(NiPoint3(-78931.f, 2789.f, 0.f)).destination.pos ==
+    whiterunInterior); // Rorikstead
 }
 
 TEST_CASE("A healed player gets up where they fell, not at a temple",
