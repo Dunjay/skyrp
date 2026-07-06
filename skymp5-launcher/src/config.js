@@ -1,5 +1,5 @@
 /**
- * Launcher configuration — developer-only.
+ * Launcher configuration - developer-only.
  *
  * apiUrl  – Base URL of the SkyRP backend.
  *           Overridden by the API_URL environment variable (set in .env for

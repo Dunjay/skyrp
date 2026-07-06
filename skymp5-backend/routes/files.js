@@ -32,19 +32,19 @@ const filesRateLimiter = rateLimit({
 
 router.use(filesRateLimiter)
 
-// ── GET /api/files/version ────────────────────────────────────────────────────
+// GET /api/files/version
 
 router.get('/version', (_req, res) => {
   if (!fs.existsSync(VERSION_PATH)) return res.status(404).json(NOT_BUILT)
   try {
-    // Read fresh every time (do NOT use require() — it caches the module)
+    // Read fresh every time (do NOT use require(); it caches the module)
     res.json(JSON.parse(fs.readFileSync(VERSION_PATH, 'utf8')))
   } catch {
     res.status(500).json({ error: 'Could not read version file.' })
   }
 })
 
-// ── GET /api/files/zip ────────────────────────────────────────────────────────
+// GET /api/files/zip
 
 router.get('/zip', (req, res) => {
   if (!fs.existsSync(ZIP_PATH)) return res.status(404).json(NOT_BUILT)

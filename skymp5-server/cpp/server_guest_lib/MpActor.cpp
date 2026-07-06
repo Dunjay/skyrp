@@ -1468,7 +1468,6 @@ LocationalData MpActor::GetSpawnPoint() const
 
 LocationalData MpActor::GetRespawnPosition() const
 {
-  // Respawn
   if (IsCreatedAsPlayer()) {
     return TempleRespawn::GetNearestTemple(GetPos()).destination;
   }

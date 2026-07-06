@@ -76,7 +76,7 @@ export class Spawn implements System {
     } catch { /* form vanished */ }
   }
 
-  // ── Character select ──────────────────────────────────────────────────────
+  // Character select
 
   // The SkyMP gamemode reads these private props off the character; mirror
   // the master-api profile onto the actor so dashboard ranks resolve in-game.
@@ -90,6 +90,18 @@ export class Spawn implements System {
         mp.set(actorId, "private.skympAccess", access);
       }
     } catch { /* form vanished */ }
+  }
+
+  // Mirror the resolved auth context onto the actor. indexed.discordId is only
+  // rewritten when it actually changes, keeping the private index stable.
+  private applyAuthProps(mp: Mp, actorId: number, profileId: number,
+    roles: string[], discordId?: string, access?: unknown): void {
+    mp.set(actorId, "private.discordRoles", roles);
+    if (discordId !== undefined &&
+      mp.get(actorId, "private.indexed.discordId") !== discordId) {
+      mp.set(actorId, "private.indexed.discordId", discordId);
+    }
+    this.setSkympProps(mp, actorId, profileId, discordId, access);
   }
 
   private characterName(ctx: SystemContext, actorId: number): string {
@@ -147,7 +159,7 @@ export class Spawn implements System {
       const idx = randomInteger(0, startPoints.length - 1);
       actorId = ctx.svr.createActor(0, startPoints[idx].pos, startPoints[idx].angleZ,
         +startPoints[idx].worldOrCell, auth.profileId);
-      mp.set(actorId, "private.charSlot", slot);   // persist the slot
+      mp.set(actorId, "private.charSlot", slot);
       this.log("Creating character", actorId.toString(16), "in slot", slot);
     } else {
       this.log("Loading character", actorId.toString(16), "from slot", slot);
@@ -163,12 +175,8 @@ export class Spawn implements System {
     ctx.svr.setUserActor(userId, actorId);
     if (isNew) ctx.svr.setRaceMenuOpen(actorId, true);
 
-    mp.set(actorId, "private.discordRoles", auth.roles);
-    if (auth.discordId !== undefined &&
-      mp.get(actorId, "private.indexed.discordId") !== auth.discordId) {
-      mp.set(actorId, "private.indexed.discordId", auth.discordId);
-    }
-    this.setSkympProps(mp, actorId, auth.profileId, auth.discordId, filterAccessForSlot(auth.access, slot));
+    this.applyAuthProps(mp, actorId, auth.profileId, auth.roles, auth.discordId,
+      filterAccessForSlot(auth.access, slot));
 
     this.pending.delete(userId);
   }
@@ -185,7 +193,7 @@ export class Spawn implements System {
     this.sendCharacterList(ctx, userId, auth.profileId);
   }
 
-  // ── Legacy single-character path (flag off): original behaviour verbatim ────
+  // Legacy single-character path (flag off): original behaviour kept
 
   private legacySpawn(ctx: SystemContext, userId: number, userProfileId: number,
     discordRoleIds: string[], discordId?: string, access?: unknown): void {
@@ -205,15 +213,6 @@ export class Spawn implements System {
     }
 
     const mp = ctx.svr as unknown as Mp;
-    mp.set(actorId, "private.discordRoles", discordRoleIds);
-
-    if (discordId !== undefined) {
-      if (mp.get(actorId, "private.indexed.discordId") !== discordId) {
-        mp.set(actorId, "private.indexed.discordId", discordId);
-      }
-      const forms = mp.findFormsByPropertyValue("private.indexed.discordId", discordId) as number[];
-      console.log(`Found forms ${forms}`);
-    }
-    this.setSkympProps(mp, actorId, userProfileId, discordId, access);
+    this.applyAuthProps(mp, actorId, userProfileId, discordRoleIds, discordId, access);
   }
 }

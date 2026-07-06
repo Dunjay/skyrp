@@ -35,6 +35,9 @@ $$('.tab').forEach(tab => {
 // Build output streams to the active panel's log (Build → #build-log, Modlist → #modlist-log).
 window.mgr.onBuildLog(t => appendLog($('.panel.active')?.querySelector('.log') || $('#build-log'), t))
 
+// Keep in sync with `services` in src/config.js (the main process owns the
+// nssm service names; this is the renderer's copy of key/label). If the two
+// drift, the UI silently shows a stale set.
 const SERVICES = [
   { key: 'nginx',   label: 'Nginx'   },
   { key: 'backend', label: 'Backend' },

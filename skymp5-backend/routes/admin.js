@@ -1,7 +1,7 @@
 'use strict'
-// ── Admin proxy ───────────────────────────────────────────────────────────────
+// Admin proxy
 // Validates the bearer token, then forwards requests to the SkyMP-Admin
-// service. Keeps the admin service off the public internet — only the backend
+// service. Keeps the admin service off the public internet: only the backend
 // is exposed; the admin process binds to localhost only.
 
 const { Router } = require('express')
@@ -10,6 +10,7 @@ const https      = require('https')
 const crypto     = require('crypto')
 const config     = require('../config')
 const sessions   = require('../sources/dashboardSessions')
+const { hasPermission } = require('../sources/permissions')
 
 const router = Router()
 
@@ -25,8 +26,10 @@ function validateToken(req, res) {
     return false
   }
 
-  // Accept a valid dashboard session token (Discord-authenticated admin)
-  if (sessions.validate(provided)) return true
+  // Accept a dashboard session token only when it carries superuser (admin.*)
+  // permission. View-only roles must not be able to control the game server.
+  const session = sessions.validate(provided)
+  if (session && hasPermission(session.permissions || [], 'admin.*')) return true
 
   // Fall back to static ADMIN_TOKEN
   const expected = Buffer.from(config.adminToken)
@@ -46,8 +49,8 @@ router.all('/*', (req, res) => {
   const useHttps = base.protocol === 'https:'
   const lib      = useHttps ? https : http
 
-  // Strip the /api/admin prefix — forward the remainder to the admin service
-  const adminPath = '/api' + req.path  // e.g. /api/admin/server/start → /api/server/start
+  // Strip the /api/admin prefix, forward the remainder to the admin service
+  const adminPath = '/api' + req.path  // e.g. /api/admin/server/start -> /api/server/start
 
   const options = {
     hostname: base.hostname,

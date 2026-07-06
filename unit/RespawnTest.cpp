@@ -90,6 +90,7 @@ TEST_CASE("DeathState packed is correct if actor is respawning", "[Respawn]")
   REQUIRE(ac.GetChangeForm().actorValues.healthPercentage == 1.f);
 
   // TODO: should probably not sending to ourselves. see also RespawnEvent.cpp
+
   // The RespawnEvent broadcasts an "isDead=false" property update; teleport
   // streaming means it is no longer at a fixed index, so scan for it.
   bool foundIsDeadBroadcast = false;

@@ -1,7 +1,5 @@
 import { ClientListener, CombinedController, Sp } from "./clientListener";
-import { showSystemNotification } from "./systemNotification";
-import { CustomPacketMessage } from "../messages/customPacketMessage";
-import { MsgType } from "../../messages";
+import { sendCustomPacket, notifyNextUpdate } from "./customPacketUtil";
 import { FunctionInfo } from "../../lib/functionInfo";
 import { Actor, BrowserMessageEvent, ButtonEvent, DxScanCode } from "skyrimPlatform";
 import { localIdToRemoteId } from "../../view/worldViewMisc";
@@ -95,10 +93,10 @@ export class PlayerActionService extends ClientListener {
       this.pendingTransfer = null;
       const recipient = ref && Actor.from(ref) ? ref : null;
       if (!recipient) {
-        this.notify("Transfer cancelled — that is not a person.");
+        notifyNextUpdate(this.controller, this.sp, "Transfer cancelled - that is not a person.");
         return;
       }
-      this.sendPacket({
+      sendCustomPacket(this.controller, {
         customPacketType: "propertyRequest",
         action: "transfer",
         target: transferTarget,
@@ -108,7 +106,7 @@ export class PlayerActionService extends ClientListener {
     }
 
     if (!ref) {
-      this.notify("Look at a player, door, or container.");
+      notifyNextUpdate(this.controller, this.sp, "Look at a player, door, or container.");
       return;
     }
 
@@ -117,7 +115,7 @@ export class PlayerActionService extends ClientListener {
     if (actor && ref.getFormID() !== 0x14) {
       targetName = (ref.getName() || "").trim();
       if (!targetName) {
-        this.notify("That target has no name.");
+        notifyNextUpdate(this.controller, this.sp, "That target has no name.");
         return;
       }
       this.mode = "player";
@@ -130,7 +128,7 @@ export class PlayerActionService extends ClientListener {
       logTrace(this, `Opening house menu for`, targetName, `(${this.houseTarget})`);
       this.openMenu();
     } else {
-      this.notify("Look at a player, door, or container.");
+      notifyNextUpdate(this.controller, this.sp, "Look at a player, door, or container.");
     }
   }
 
@@ -156,21 +154,21 @@ export class PlayerActionService extends ClientListener {
     const target = this.houseTarget;
     switch (key) {
       case events.hClaim:
-        this.sendPacket({ customPacketType: "propertyRequest", action: "claim", target });
+        sendCustomPacket(this.controller, { customPacketType: "propertyRequest", action: "claim", target });
         this.closeMenu();
         break;
       case events.hLock:
-        this.sendPacket({ customPacketType: "propertyRequest", action: "lock", target });
+        sendCustomPacket(this.controller, { customPacketType: "propertyRequest", action: "lock", target });
         this.closeMenu();
         break;
       case events.hUnlock:
-        this.sendPacket({ customPacketType: "propertyRequest", action: "unlock", target });
+        sendCustomPacket(this.controller, { customPacketType: "propertyRequest", action: "unlock", target });
         this.closeMenu();
         break;
       case events.hTransfer:
         this.pendingTransfer = target;
         this.closeMenu();
-        this.notify("Look at the new owner and press the interact key.");
+        notifyNextUpdate(this.controller, this.sp, "Look at the new owner and press the interact key.");
         break;
       default:
         break;
@@ -179,21 +177,7 @@ export class PlayerActionService extends ClientListener {
 
   private sendCommand(text: string): void {
     logTrace(this, `Player-action command:`, text);
-    this.sendPacket({ type: "cef::chat:send", data: text });
-  }
-
-  private sendPacket(payload: Record<string, unknown>): void {
-    const message: CustomPacketMessage = {
-      t: MsgType.CustomPacket,
-      contentJsonDump: JSON.stringify(payload),
-    };
-    this.controller.emitter.emit("sendMessage", { message, reliability: "reliable" });
-  }
-
-  private notify(text: string): void {
-    this.controller.once("update", () => {
-      showSystemNotification(this.sp, text);
-    });
+    sendCustomPacket(this.controller, { type: "cef::chat:send", data: text });
   }
 
   private openMenu(): void {

@@ -207,6 +207,16 @@ foreach(project ${sorted_projects})
   add_subdirectory(${project})
 endforeach()
 
+# Shared by the Nexus-archive and RestartGame dependency loops below.
+# One or more of these targets help dev_service not to crash during build (watch mode). Not sure which target exactly.
+set(TARGETS_ADDITIONAL
+  skymp5-client
+  skymp5-front
+  skymp5-functions-lib
+  skymp5-scripts
+  skymp5-server
+)
+
 if(PREPARE_NEXUS_ARCHIVES)
   add_custom_target(
     prepare_nexus_archives ALL
@@ -215,13 +225,6 @@ if(PREPARE_NEXUS_ARCHIVES)
   )
 
   add_dependencies(prepare_nexus_archives skyrim-platform papyrus-vm)
-  set(TARGETS_ADDITIONAL
-    skymp5-client
-    skymp5-front
-    skymp5-functions-lib
-    skymp5-scripts
-    skymp5-server
-  )
   foreach(target ${TARGETS_ADDITIONAL})
     if(TARGET ${target})
       add_dependencies(prepare_nexus_archives ${target})
@@ -229,14 +232,6 @@ if(PREPARE_NEXUS_ARCHIVES)
   endforeach()
 endif()
 
-# One or more of these targets help dev_service not to crash during build (watch mode). Not sure which target exactly.
-set(TARGETS_ADDITIONAL
-    skymp5-client
-    skymp5-front
-    skymp5-functions-lib
-    skymp5-scripts
-    skymp5-server
-  )
 foreach(target ${TARGETS_ADDITIONAL})
   if(TARGET ${target} AND TARGET RestartGame)
     add_dependencies(RestartGame ${target})

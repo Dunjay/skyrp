@@ -39,8 +39,8 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 	
 const serviceByKey = Object.fromEntries(config.services.map(s => [s.key, s]))
 
-// nssm <verb> <service ...args> — returns trimmed stdout (status / message).
-// nssm prints UTF-16LE; read as utf8 it interleaves NUL bytes — strip them.
+// nssm <verb> <service ...args> - returns trimmed stdout (status / message).
+// nssm prints UTF-16LE; read as utf8 it interleaves NUL bytes, so strip them.
 function nssm(verb, name, ...rest) {
   return new Promise(resolve => {
     execFile(config.nssm, [verb, name, ...rest], { windowsHide: true, timeout: 30000 }, (err, stdout, stderr) => {
@@ -72,7 +72,7 @@ ipcMain.handle('service:action', async (_e, key, action) => {
   return { ok: true, steps, status: await statusAll() }
 })
 
-// Act on every service in order (stop order reversed) — the "all" controls.
+// Act on every service in order (stop order reversed) - the "all" controls.
 ipcMain.handle('services:action', async (_e, action) => {
   const steps = []
   const doStop  = async () => { for (const s of [...config.services].reverse()) steps.push(`${s.label}: ${await nssm('stop', s.name)}`) }
@@ -130,7 +130,7 @@ function pollLogs() {
         fs.closeSync(fd)
         tailState[file] = stat.size
         send('log:data', { source: label, text: buf.toString('utf8') })
-      } catch { /* mid-write race — retry next tick */ }
+      } catch { /* mid-write race, retry next tick */ }
     }
   }
 }
@@ -140,9 +140,6 @@ function startLogTail() {
   setInterval(pollLogs, 1500)
   setInterval(discoverLogTargets, 30000)   // services may be re-installed/reconfigured
 }
-
-ipcMain.handle('log:dir', () => config.logDir)
-ipcMain.handle('log:targets', () => logTargets.map(t => ({ label: t.label, file: t.file })))
 
 const consoleRelay = {
   ws: null, connected: false, timer: null,
@@ -165,7 +162,7 @@ const consoleRelay = {
   },
   scheduleReconnect() { if (this.timer) return; this.timer = setTimeout(() => { this.timer = null; this.connect() }, 4000) },
   command(text) {
-    if (!this.connected || !this.ws) return { ok: false, error: 'relay not connected — is the backend running?' }
+    if (!this.connected || !this.ws) return { ok: false, error: 'relay not connected - is the backend running?' }
     try { this.ws.send(JSON.stringify({ type: 'console_command', text })); return { ok: true } }
     catch (err) { return { ok: false, error: err.message } }
   },
@@ -202,40 +199,41 @@ function setRouteVersion(file, version) {
 function setEnvVar(file, key, value) {
   let txt = ''
   try { txt = fs.readFileSync(file, 'utf8') } catch {}
+  // Strip CR/LF so a value cannot inject extra KEY=value lines into the .env.
+  value = String(value).replace(/[\r\n]+/g, ' ')
   const line = `${key}=${value}`
   const re = new RegExp(`^[ \\t]*${key}[ \\t]*=.*$`, 'm')
-  if (re.test(txt)) txt = txt.replace(re, line)
+  // Replace via a function so $-sequences in the value are not treated as patterns.
+  if (re.test(txt)) txt = txt.replace(re, () => line)
   else txt = txt.replace(/\s*$/, '') + `\n${line}\n`
   fs.writeFileSync(file, txt)
 }
 
-ipcMain.handle('launcher:getVersion', () => {
-  try { return { version: JSON.parse(fs.readFileSync(config.paths.launcherPkg, 'utf8')).version } }
-  catch (err) { return { version: '', error: err.message } }
-})
-ipcMain.handle('launcher:setVersion', (_e, version) => {
-  version = String(version || '').trim()
-  if (!/^\d+\.\d+\.\d+/.test(version)) return { ok: false, error: 'Use a semver like 1.2.3' }
-  try {
-    setJsonVersion(config.paths.launcherPkg, version)
-    setRouteVersion(config.paths.versionRoute, version)
-    return { ok: true }
-  } catch (err) { return { ok: false, error: err.message } }
-})
+// Anchored at both ends: the version is spliced into backend source
+// (routes/version.js) and the backend .env, so trailing garbage must be rejected.
+const SEMVER_RE = /^\d+\.\d+\.\d+$/
 
-ipcMain.handle('client:getVersion', () => {
-  try { return { version: JSON.parse(fs.readFileSync(config.paths.clientPkg, 'utf8')).version } }
-  catch (err) { return { version: '', error: err.message } }
-})
-ipcMain.handle('client:setVersion', (_e, version) => {
-  version = String(version || '').trim()
-  if (!/^\d+\.\d+\.\d+/.test(version)) return { ok: false, error: 'Use a semver like 1.2.3' }
-  try {
-    setJsonVersion(config.paths.clientPkg, version)
-    setEnvVar(config.paths.backendEnv, 'CLIENT_VERSION', version)
-    return { ok: true }
-  } catch (err) { return { ok: false, error: err.message } }
-})
+// Register the getVersion/setVersion IPC pair for one component. The getter reads
+// pkgPath's version; the setter validates the semver, writes pkgPath, then runs
+// each extra writer (e.g. routes/version.js or the backend .env).
+function registerVersionIpc(name, pkgPath, extraWriteFns) {
+  ipcMain.handle(`${name}:getVersion`, () => {
+    try { return { version: JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version } }
+    catch (err) { return { version: '', error: err.message } }
+  })
+  ipcMain.handle(`${name}:setVersion`, (_e, version) => {
+    version = String(version || '').trim()
+    if (!SEMVER_RE.test(version)) return { ok: false, error: 'Use a semver like 1.2.3' }
+    try {
+      setJsonVersion(pkgPath, version)
+      for (const fn of extraWriteFns) fn(version)
+      return { ok: true }
+    } catch (err) { return { ok: false, error: err.message } }
+  })
+}
+
+registerVersionIpc('launcher', config.paths.launcherPkg, [v => setRouteVersion(config.paths.versionRoute, v)])
+registerVersionIpc('client', config.paths.clientPkg, [v => setEnvVar(config.paths.backendEnv, 'CLIENT_VERSION', v)])
 
 function backendModule(name) {
   return require(path.join(config.paths.backend, 'sources', name))
@@ -337,7 +335,7 @@ ipcMain.handle('players:update', (_e, profileId, patch) => {
   } catch (err) { return { ok: false, error: err.message } }
 })
 
-// ── Settings tab (structured forms) ────────────────────────────────────────────
+// Settings tab (structured forms)
 
 ipcMain.handle('settings:schema', () => schema)
 
@@ -424,7 +422,7 @@ ipcMain.handle('settings:write', (_e, key, values, extraRaw) => {
   } catch (err) { return { ok: false, error: err.message } }
 })
 
-// ── Modlist tab (unchanged) ────────────────────────────────────────────────────
+// Modlist tab
 
 ipcMain.handle('modlist:read', () => {
   const profileDir = path.join(config.mo2Root, 'profiles', config.profile)
@@ -456,6 +454,8 @@ ipcMain.handle('modlist:updateManifest', async () => {
   if (!dep.ok) return { ok: false, error: 'backend dependency install failed' }
   const args = ['scripts/compile-manifest.js', '--mo2', config.mo2Root, '--profile', config.profile]
   if (fs.existsSync(path.join(config.gameRoot, 'SkyrimSE.exe'))) args.push('--game', config.gameRoot)
-  const r = await b.run('node', args, config.paths.backend, 'compile-manifest')
+  // Spawn node.exe directly (shell=false): no cmd.exe means config-derived paths
+  // with spaces or shell metacharacters cannot split args or be interpreted.
+  const r = await b.run('node', args, config.paths.backend, 'compile-manifest', null, false)
   return r.ok ? { ok: true } : { ok: false, error: 'compile-manifest failed' }
 })

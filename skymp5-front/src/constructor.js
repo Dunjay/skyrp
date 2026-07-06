@@ -99,7 +99,6 @@ const Constructor = props => {
                   marginTop: '4px'
                 };
               }
-              console.log(style, allElems[i]);
             }
           }
         }

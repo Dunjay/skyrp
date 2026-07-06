@@ -1,14 +1,12 @@
 const router = require('express').Router()
-const net    = require('net')
 const http   = require('http')
+const dgram  = require('dgram')
 const config = require('../config')
 const { getHeartbeat } = require('./servers')
 
-// UDP reachability check for the game port
-// TCP wasnt working lul
+// UDP reachability check; the game port does not accept TCP.
 function udpCheck(host, port) {
   return new Promise(resolve => {
-    const dgram = require('dgram')
     const socket = dgram.createSocket('udp4')
     const msg = Buffer.from('ping')
     let resolved = false

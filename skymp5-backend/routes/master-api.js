@@ -1,11 +1,11 @@
 'use strict'
 
 /**
- * Master API — called by the SkyMP game server (not the client directly).
+ * Master API, called by the SkyMP game server (not the client directly).
  *
  * Mounted twice in server.js:
- *   app.use('/auth',        masterApiRoute)  → POST /auth/session
- *   app.use('/api/servers', masterApiRoute)  → GET/POST /api/servers/:key/…
+ *   app.use('/auth',        masterApiRoute)  -> POST /auth/session
+ *   app.use('/api/servers', masterApiRoute)  -> GET/POST /api/servers/:key/…
  *
  * Endpoints:
  *
@@ -52,7 +52,7 @@ const serverAccess = require('../sources/serverAccess')
 const profiles = require('../sources/profiles')
 const players  = require('../sources/players')
 
-// ── Persistent balance store — profileId → coin balance ──────────────────────
+// Persistent balance store: profileId -> coin balance
 
 const BALANCES_PATH = path.join(__dirname, '..', 'data', 'balances.json')
 
@@ -77,7 +77,7 @@ function setBalance(profileId, balance) {
   saveBalances(data)
 }
 
-// ── In-memory session store — used for online-mode validation only ────────────
+// In-memory session store, used for online-mode validation only
 
 const sessions      = new Map()
 const SESSION_TTL   = 24 * 60 * 60 * 1000  // 24 h
@@ -103,19 +103,19 @@ function loadSessions() {
     for (const [token, s] of entries)
       if (s.expiresAt > now) sessions.set(token, s)
     console.log(`Loaded ${sessions.size} active session(s) from disk`)
-  } catch { /* first run or file absent — start fresh */ }
+  } catch { /* first run or file absent: start fresh */ }
 }
 
 loadSessions()
 
-// ── Helper — look up a session entry (exported for serverinfo route) ──────────
+// Helper: look up a session entry (exported for serverinfo route)
 
 function lookupSession(token) {
   pruneExpired()
   return sessions.get(token) || null
 }
 
-// ── Helper — validate server master key ──────────────────────────────────────
+// Helper: validate server master key
 
 function checkKey(req, res) {
   if (req.params.key !== config.serverMasterKey) {
@@ -158,7 +158,7 @@ function getProfileFactionPayload(discordId) {
   }
 }
 
-// ── Session creation helper (used by POST /auth/session and discord-auth callback) ─
+// Session creation helper (used by POST /auth/session and discord-auth callback)
 
 function createSession(discordUser) {
   pruneExpired()
@@ -175,7 +175,7 @@ function createSession(discordUser) {
   return { profileId, session: token }
 }
 
-// ── POST /auth/session ────────────────────────────────────────────────────────
+// POST /auth/session
 
 router.post('/session', (req, res) => {
   const { discordUser } = req.body || {}
@@ -186,7 +186,7 @@ router.post('/session', (req, res) => {
   res.json(result)
 })
 
-// ── GET /api/servers/:key/sessions/:session ───────────────────────────────────
+// GET /api/servers/:key/sessions/:session
 
 router.get('/:key/sessions/:session', async (req, res) => {
   if (!checkKey(req, res)) return
@@ -225,7 +225,7 @@ router.get('/:key/sessions/:session', async (req, res) => {
   })
 })
 
-// ── GET /api/servers/:key/profiles/:profileId/check ──────────────────────────
+// GET /api/servers/:key/profiles/:profileId/check
 // Used by the game server in offline mode to verify a profileId is allowed.
 
 router.get('/:key/profiles/:profileId/check', async (req, res) => {
@@ -253,7 +253,7 @@ router.get('/:key/profiles/:profileId/check', async (req, res) => {
   })
 })
 
-// â”€â”€ POST /api/servers/:key/profiles/:profileId/factions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// POST /api/servers/:key/profiles/:profileId/factions
 
 router.post('/:key/profiles/:profileId/factions', (req, res) => {
   if (!checkKey(req, res) || !checkWriteToken(req, res)) return
@@ -275,7 +275,7 @@ router.post('/:key/profiles/:profileId/factions', (req, res) => {
   }
 })
 
-// â”€â”€ DELETE /api/servers/:key/profiles/:profileId/factions/:assignmentId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// DELETE /api/servers/:key/profiles/:profileId/factions/:assignmentId
 
 router.delete('/:key/profiles/:profileId/factions/:assignmentId', (req, res) => {
   if (!checkKey(req, res) || !checkWriteToken(req, res)) return
@@ -299,7 +299,7 @@ router.delete('/:key/profiles/:profileId/factions/:assignmentId', (req, res) => 
   }
 })
 
-// ── GET /api/servers/:key/sessions/:session/balance ───────────────────────────
+// GET /api/servers/:key/sessions/:session/balance
 
 router.get('/:key/sessions/:session/balance', (req, res) => {
   if (!checkKey(req, res)) return
@@ -313,7 +313,7 @@ router.get('/:key/sessions/:session/balance', (req, res) => {
   res.json({ user: { id: entry.profileId, balance } })
 })
 
-// ── POST /api/servers/:key/sessions/:session/purchase ────────────────────────
+// POST /api/servers/:key/sessions/:session/purchase
 
 router.post('/:key/sessions/:session/purchase', (req, res) => {
   if (!checkKey(req, res)) return
@@ -337,9 +337,8 @@ router.post('/:key/sessions/:session/purchase', (req, res) => {
   res.json({ balanceSpent: balanceToSpend, success: true })
 })
 
-// Fix for whitelist issues
+// Wraps getDiscordAccess for the serverinfo routes.
 async function isDiscordWhitelisted(discordId) {
-  const serverAccess = require('../sources/serverAccess')
   const result = await serverAccess.getDiscordAccess(discordId)
   return result.allowed === true
 }

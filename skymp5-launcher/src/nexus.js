@@ -11,7 +11,7 @@
  *    straight into MO2's downloads folder, Wabbajack-style.
  *
  * Free accounts can't generate download links through the API (Nexus
- * policy) — for them the launcher falls back to opening mod pages and
+ * policy) - for them the launcher falls back to opening mod pages and
  * catching the nxm:// downloads via the registered handler.
  */
 
@@ -22,11 +22,11 @@ const path  = require('path')
 const GAME       = 'skyrimspecialedition'
 const USER_AGENT = 'SkyRP-Launcher/1.0.0'
 
-// ── Logger ────────────────────────────────────────────────────────────────────
+// Logger
 let _log = (...args) => console.log('[nexus]', ...args)
 function setLogger(fn) { _log = (...args) => fn('[nexus]', ...args) }
 
-// ── Low-level API call ────────────────────────────────────────────────────────
+// Low-level API call
 
 function apiGet(apiKey, apiPath) {
   return new Promise((resolve, reject) => {
@@ -52,7 +52,7 @@ function apiGet(apiKey, apiPath) {
   })
 }
 
-// ── Account ───────────────────────────────────────────────────────────────────
+// Account
 
 /**
  * Validate an API key. Returns { name, isPremium, profileUrl } or throws.
@@ -66,7 +66,7 @@ async function validateKey(apiKey) {
   }
 }
 
-// ── Mod files ─────────────────────────────────────────────────────────────────
+// Mod files
 
 /**
  * PREMIUM ONLY: generate a direct download link for a specific file.
@@ -80,7 +80,7 @@ async function getDownloadLink(apiKey, nexusId, fileId) {
   return links[0].URI
 }
 
-// ── Download ──────────────────────────────────────────────────────────────────
+// Download
 
 /** Stream a URL to destPath, following redirects. */
 function downloadFile(url, destPath, onProgress, redirectsLeft = 5) {
@@ -113,7 +113,7 @@ function downloadFile(url, destPath, onProgress, redirectsLeft = 5) {
   })
 }
 
-// ── File download ─────────────────────────────────────────────────────────────
+// File download
 
 /**
  * Download one resolved file entry into downloadsDir. The archive is named
@@ -135,7 +135,7 @@ async function downloadFileEntry(apiKey, nexusId, file, downloadsDir, onProgress
   return archiveName
 }
 
-// ── SSO login (one-click, Vortex/Wabbajack-style) ─────────────────────────────
+// SSO login (one-click, Vortex/Wabbajack-style)
 
 /**
  * Nexus SSO flow: connect to wss://sso.nexusmods.com, hand the browser an
@@ -169,7 +169,7 @@ function ssoLogin(appSlug, openUrl, timeoutMs = 5 * 60 * 1000) {
       err ? reject(err) : resolve(key)
     }
 
-    const timer = setTimeout(() => finish(new Error('Nexus login timed out — try again.')), timeoutMs)
+    const timer = setTimeout(() => finish(new Error('Nexus login timed out - try again.')), timeoutMs)
 
     ws.onopen = () => {
       // protocol 2: server replies with a connection_token, then (after the
@@ -188,7 +188,7 @@ function ssoLogin(appSlug, openUrl, timeoutMs = 5 * 60 * 1000) {
         _log('SSO login complete')
         return finish(null, msg.data.api_key)
       }
-      // First reply carries data.connection_token — nothing to do but wait.
+      // First reply carries data.connection_token - nothing to do but wait.
     }
 
     ws.onerror = ()  => finish(new Error('Could not reach the Nexus SSO service.'))

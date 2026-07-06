@@ -73,12 +73,7 @@ export class Login implements System {
   async initAsync(ctx: SystemContext): Promise<void> {
     this.settingsObject = await Settings.get();
 
-    this.log(
-      `Login system assumed that ${this.masterKey} is our master api key`
-    );
-  }
-
-  disconnect(userId: number): void {
+    this.log("Login system: master api key configured");
   }
 
   customPacket(
@@ -181,13 +176,6 @@ export class Login implements System {
                 shouldHideIp = true;
               }
             }
-
-            // TODO: enable logging instead of throw
-            // Disabled this check to be able bypassing ratelimit
-            // if (response.status !== 200) {
-            //   throw new Error("Unexpected response status: " +
-            //     JSON.stringify({ status: response.status, data: response.data }));
-            // }
           }
 
 

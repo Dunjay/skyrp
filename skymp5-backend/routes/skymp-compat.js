@@ -23,10 +23,10 @@
  *
  *   GET /api/users/login-discord/status?state=<hex>
  *     Client polls this while waiting for the browser OAuth to finish.
- *     401 — still pending
- *     200 — done; returns { token, masterApiId, discordUsername, discordDiscriminator, discordAvatar }
+ *     401: still pending
+ *     200: done; returns { token, masterApiId, discordUsername, discordDiscriminator, discordAvatar }
  *           The `token` is the play-session token; /me/play just validates it.
- *     403 — unknown or expired state
+ *     403: unknown or expired state
  *
  *   POST /api/users/me/play/:serverKey
  *     Headers: { authorization: <token> }
@@ -39,8 +39,8 @@ const https   = require('https')
 const crypto  = require('crypto')
 const config  = require('../config')
 
-// ── Pending/completed auth store ─────────────────────────────────────────────
-// state → { status: 'pending'|'done', expiresAt, ...sessionFields }
+// Pending/completed auth store
+// state -> { status: 'pending'|'done', expiresAt, ...sessionFields }
 // Pending entries expire after 10 minutes (OAuth timeout).
 // Done entries expire after 5 minutes (client has time to call /status once).
 
@@ -54,7 +54,7 @@ function pruneAuthStates() {
     if (v.expiresAt < now) authStates.delete(k)
 }
 
-// ── GET /api/users/login-discord ─────────────────────────────────────────────
+// GET /api/users/login-discord
 
 router.get('/login-discord', (req, res) => {
   const { state } = req.query
@@ -78,7 +78,7 @@ router.get('/login-discord', (req, res) => {
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`)
 })
 
-// ── GET /api/users/login-discord/callback ────────────────────────────────────
+// GET /api/users/login-discord/callback
 // Discord's registered redirect URI.  Must be set to:
 //   <MASTER_URL>/api/users/login-discord/callback
 // in both DISCORD_REDIRECT_URI (.env) and the Discord application settings.
@@ -137,7 +137,7 @@ router.get('/login-discord/callback', async (req, res) => {
   }
 })
 
-// ── GET /api/users/login-discord/status ──────────────────────────────────────
+// GET /api/users/login-discord/status
 
 router.get('/login-discord/status', (req, res) => {
   const { state } = req.query
@@ -162,7 +162,7 @@ router.get('/login-discord/status', (req, res) => {
   })
 })
 
-// ── POST /api/users/me/play/:serverKey ───────────────────────────────────────
+// POST /api/users/me/play/:serverKey
 
 router.post('/me/play/:serverKey', (req, res) => {
   const token = req.headers['authorization']
@@ -179,7 +179,7 @@ router.post('/me/play/:serverKey', (req, res) => {
   res.json({ session: token })
 })
 
-// ── Discord API helpers ───────────────────────────────────────────────────────
+// Discord API helpers
 
 function discordTokenExchange(params) {
   return new Promise((resolve, reject) => {

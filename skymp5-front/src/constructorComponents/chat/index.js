@@ -8,7 +8,7 @@ import Channels, { DEFAULT_CHANNEL, SYSTEM_CHANNEL, applyChannel, channelForMess
 import { replaceIfMoreThan20 } from '../../utils/replaceIfMoreThan20';
 
 import './styles.scss';
-const MAX_LENGTH = 2000; // Max message length
+const MAX_LENGTH = 2000;
 const TIME_LIMIT = 1; // Seconds
 const SHOUT_LIMIT = 180; // Seconds
 const MAX_LINES = 10;
@@ -45,8 +45,6 @@ const Chat = (props) => {
   const [isInputFocus, changeInputFocus] = useState(false);
   const [hideNonRP, changeNonRPHide] = useState(false);
   const [disableDiceSounds, setDisableDiceSounds] = useState(saved.disableDiceSounds != null ? saved.disableDiceSounds : false);
-  const [disableDiceColors, setDisableDiceColors] = useState(false);
-  const [isPouchOpened, setPouchOpened] = useState(0);
   const [isSettingsOpened, setSettingsOpened] = useState(false);
   const [lockChat, setLockChat] = useState(saved.lockChat != null ? saved.lockChat : false);
   const [chatTransparency, setChatTransparency] = useState(saved.chatTransparency != null ? saved.chatTransparency : 25);
@@ -76,19 +74,19 @@ const Chat = (props) => {
 
   const writtenMessage = useRef('');
   
-  // The System tab is a read-only feed of notifications — you can't type into it.
+  // The System tab is a read-only feed of notifications - you can't type into it.
   const isSystemTab = channel === SYSTEM_CHANNEL;
 
   const hasUnreadPersonal = window.chatMessages.some((m) => m.channel === 'personal' && !m.read);
   const hasUnreadSystem = window.chatMessages.some((m) => m.channel === SYSTEM_CHANNEL && !m.read);
-	useEffect(() => {
-	  if (channel === 'personal') {
-		window.chatMessages.forEach((m) => { if (m.channel === 'personal') m.read = true; });
-	  }
-	  if (channel === SYSTEM_CHANNEL) {
-		window.chatMessages.forEach((m) => { if (m.channel === SYSTEM_CHANNEL) m.read = true; });
-	  }
-	}, [channel, props.messages]);
+  useEffect(() => {
+    if (channel === 'personal') {
+      window.chatMessages.forEach((m) => { if (m.channel === 'personal') m.read = true; });
+    }
+    if (channel === SYSTEM_CHANNEL) {
+      window.chatMessages.forEach((m) => { if (m.channel === SYSTEM_CHANNEL) m.read = true; });
+    }
+  }, [channel, props.messages]);
 
   const handleScroll = () => {
     if (chatRef.current) {
@@ -106,7 +104,7 @@ const Chat = (props) => {
 
   const addMessageToHistory = (message) => {
     messagesHistory.current = [message, ...messagesHistory.current];
-    if (messagesHistory.length > MAX_HISTORY_LENGTH) {
+    if (messagesHistory.current.length > MAX_HISTORY_LENGTH) {
       messagesHistory.current = messagesHistory.current.slice(0, MAX_HISTORY_LENGTH);
     }
     currentMessageInHistory.current = -1;
@@ -128,13 +126,13 @@ const Chat = (props) => {
         const applied = applyChannel(message, channel);
         send(applied);
         addMessageToHistory(message);
-        // Follow the message into its tab (e.g. "/ooc hi" -> Global). 
+        // Follow the message into its tab (e.g. "/ooc hi" -> Global).
         const target = channelForMessage(applied);
         if (target) setChannel(target);
       }
       isReset.current = false;
       updateInput('');
-      inputRef.current.innerHTML = '';
+      inputRef.current.textContent = '';
       // Returns mouse to look after hitting send
       inputRef.current.blur();
       if (window.skyrimPlatform && window.skyrimPlatform.sendMessage) {
@@ -174,7 +172,7 @@ const Chat = (props) => {
         if (currentMessageInHistory.current + 1 < messagesHistory.current.length) {
           currentMessageInHistory.current = currentMessageInHistory.current + 1;
           updateInput(messagesHistory.current[currentMessageInHistory.current]);
-          inputRef.current.innerHTML = messagesHistory.current[currentMessageInHistory.current];
+          inputRef.current.innerText = messagesHistory.current[currentMessageInHistory.current];
           setEndOfContenteditable(inputRef.current);
         }
       }
@@ -182,13 +180,13 @@ const Chat = (props) => {
         if (currentMessageInHistory.current >= 0) {
           if (currentMessageInHistory.current === 0) {
             updateInput(writtenMessage.current);
-            inputRef.current.innerHTML = writtenMessage.current;
+            inputRef.current.innerText = writtenMessage.current;
             setEndOfContenteditable(inputRef.current);
             currentMessageInHistory.current = -1;
           } else {
             currentMessageInHistory.current = currentMessageInHistory.current - 1;
             updateInput(messagesHistory.current[currentMessageInHistory.current]);
-            inputRef.current.innerHTML = messagesHistory.current[currentMessageInHistory.current];
+            inputRef.current.innerText = messagesHistory.current[currentMessageInHistory.current];
             setEndOfContenteditable(inputRef.current);
           }
         }
