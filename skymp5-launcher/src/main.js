@@ -796,9 +796,12 @@ ipcMain.handle('files:updateCheck', async () => {
     const vd = await fetchJSON(`${config.apiUrl}/api/files/version`)
     const gamePath   = effectiveGamePath()
     const allPresent = !!gamePath && REQUIRED_FILES.every(f => fs.existsSync(path.join(gamePath, f)))
+    // A failed modpack install also flips the Play button to UPDATE so one
+    // click re-runs the install and self-heals the incomplete state.
+    const modpackFailed = store.get('mo2Enabled') && store.get('modpackState') === 'failed'
     return {
       ok: true,
-      updateAvailable: vd.version !== store.get('filesVersion') || !allPresent,
+      updateAvailable: vd.version !== store.get('filesVersion') || !allPresent || modpackFailed,
       serverVersion:   vd.version,
     }
   } catch {
@@ -1003,6 +1006,13 @@ function verifyLaunchReadiness(skyrimPath, viaMO2, serverInfo) {
     }
   }
 
+  // A modpack install that never finished leaves the game missing root
+  // components (e.g. the Engine Fixes preloader) that the required-files
+  // check cannot see - the game then launches and errors on its own.
+  if (viaMO2 && store.get('modpackState') === 'failed') {
+    problems.push('The last modpack install did not finish. Press PLAY (it will show UPDATE) or run "Install Modpack" to complete it first.')
+  }
+
   // Online servers need a launcher Discord login so auth-data-no-load.js can be seeded; without it SkyMP shows its own auth menu and never connects.
   if (serverInfo && serverInfo.offlineMode === false) {
     const session   = store.get('gameSession')
@@ -1190,11 +1200,22 @@ function missingPluginsForMO2(skyrimPath, serverLoadOrder) {
 
 // Install files
 
-let installing = false
+let installing   = false
+let installAbort = null   // AbortController for the running install's waits
 
 ipcMain.on('install:start', (_e, mode) => {
-  if (installing) return
+  if (installing) {
+    // Never ignore the click silently: the user has no other way to know an
+    // earlier install is still running (e.g. parked on a downloads wait).
+    send('install:progress', {
+      phase: 'mods',
+      file: 'An install is already running - press Cancel Install to stop it first.',
+      index: 0, total: 0, skipped: false,
+    })
+    return
+  }
   installing = true
+  installAbort = new AbortController()
 
   let fn
   if (mode === 'client') {
@@ -1210,6 +1231,11 @@ ipcMain.on('install:start', (_e, mode) => {
     send('install:complete', { success: false, error: `Unexpected error: ${err.message}` })
     installing = false
   })
+})
+
+// Cancels the running install at its next wait/step boundary.
+ipcMain.on('install:cancel', () => {
+  if (installing && installAbort) installAbort.abort()
 })
 
 // Shared download + extract helpers
@@ -1440,14 +1466,17 @@ async function acquireNexusArchive(modId, fileId, displayName, { downloadsDir, a
   // Already staged from a previous run? Check quietly first so the browser
   // page and folder don't open when there is nothing left to download.
   try {
-    const [pre] = await mo2.waitForDownloads([{ name: displayName, namePattern, expect }], null, undefined, 250, 1500)
+    const [pre] = await mo2.waitForDownloads([{ name: displayName, namePattern, expect }], null, installAbort?.signal, 250, 1500)
     if (pre) return pre
-  } catch { /* not staged yet - run the full browser flow below */ }
+  } catch (err) {
+    if (err.message === 'Cancelled') throw err
+    /* not staged yet - run the full browser flow below */
+  }
 
   openDownloadList(downloadsDir)
   send('install:progress', { phase: 'mods', file: `Find ${displayName} on the downloads list, click "Slow Download", and move the archive into the SkyRP downloads folder`, index: 0, total: 1, skipped: false })
   const [p] = await mo2.waitForDownloads([{ name: displayName, namePattern, expect }], (d, t, msg) =>
-    send('install:progress', { phase: 'mods', file: msg, index: d, total: t, skipped: false }))
+    send('install:progress', { phase: 'mods', file: msg, index: d, total: t, skipped: false }), installAbort?.signal)
   return p || null
 }
 
@@ -1461,6 +1490,9 @@ async function runMO2Install() {
   _downloadListOpened = false
   const fail = (msg) => {
     log('[mo2-install] ABORT:', msg)
+    // The modpack is not in a known-good state: the launch gate blocks PLAY
+    // and the update check flips the button to UPDATE until a run succeeds.
+    store.set('modpackState', 'failed')
     send('install:complete', { success: false, error: msg })
     installing = false
   }
@@ -1541,6 +1573,7 @@ async function runMO2Install() {
 
     if (modsToInstall.length === 0 && !needsRoot) {
       finishOrder()
+      store.set('modpackState', 'ready')
       send('install:complete', { success: true, mo2: true, upToDate: true, modsTotal: manifest.mods.length })
       return
     }
@@ -1605,7 +1638,8 @@ async function runMO2Install() {
       // namePattern only flags likely wrong-version files in the status message.
       const paths = await mo2.waitForDownloads(
         needBrowser.map(a => ({ name: a.name, hash: a.hash, size: a.size, namePattern: nexusNamePattern(a.source.modId, a.name) })),
-        (done, total, message) => send('install:progress', { phase: 'mods', file: message, index: done, total, skipped: false }))
+        (done, total, message) => send('install:progress', { phase: 'mods', file: message, index: done, total, skipped: false }),
+        installAbort?.signal)
       needBrowser.forEach((a, i) => { archivePaths[a.id] = paths[i] })
     }
 
@@ -1709,8 +1743,10 @@ async function runMO2Install() {
     // 5. Match MO2 priority + plugin order, record the installed version
     finishOrder()
 
+    store.set('modpackState', 'ready')
     send('install:complete', { success: true, mo2: true, upToDate: core.upToDate, modsTotal: manifest.mods.length })
   } catch (err) {
+    if (err.message === 'Cancelled') { fail('Install cancelled.'); return }
     fail(`Install failed: ${err.message}`)
     return
   } finally {

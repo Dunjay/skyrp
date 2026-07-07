@@ -752,6 +752,11 @@ function listArchiveContents(archivePath, st) {
  */
 function waitForDownloads(wanted, onProgress, signal, intervalMs = 4000, timeoutMs = 900_000) {
   let deadline   = Date.now() + timeoutMs
+  // The sliding deadline keeps an actively-staging user alive, but any churn
+  // in the downloads folder (a crawling browser download, antivirus rewrites)
+  // also slides it - so a wait whose wanted file can never match used to hang
+  // forever, wedging the whole install. Hard cap: three timeout windows.
+  const hardDeadline = Date.now() + timeoutMs * 3
   const found    = new Array(wanted.length).fill(null)
   const prevSize = new Map()    // full -> size at the previous scan; a changing size = mid-copy
   let mismatched = []           // settled files that look like a wanted mod but fail verification
@@ -835,7 +840,9 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 4000, timeout
           remaining.length ? `Waiting for downloads: ${remaining.join(', ')}${note}` : 'All downloads received')
       }
       if (remaining.length === 0) return resolve(found)
-      if (Date.now() > deadline) return reject(new Error(`Timed out waiting to download: ${remaining.join(', ')}${note}`))
+      if (Date.now() > deadline || Date.now() > hardDeadline) {
+        return reject(new Error(`Timed out waiting to download: ${remaining.join(', ')}${note}`))
+      }
       setTimeout(tick, intervalMs)
     }
     setTimeout(tick, intervalMs)

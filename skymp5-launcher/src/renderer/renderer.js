@@ -435,6 +435,7 @@ const isolatedGroup     = document.getElementById('isolated-install-group')
 
 // locks install via mo2 until there's a game to manage
 function refreshDownloadModsState(st) {
+  if (mo2InstallRunning) return  // button is in Cancel mode; don't fight it
   const ready = !fieldIsolated.checked || st.ready
   btnInstallMo2.disabled = !ready
   btnInstallMo2.title = ready
@@ -605,7 +606,18 @@ document.getElementById('btn-install-client').addEventListener('click', () => {
 // Install Modpack via MO2
 const installStatusMo2 = document.getElementById('install-status-mo2')
 
+let mo2InstallRunning = false
+
 function startModpackInstall() {
+  // While an install runs the same button cancels it, so a wedged install
+  // can always be stopped and retried without restarting the launcher.
+  if (mo2InstallRunning) {
+    installStatusMo2.textContent = 'Cancelling…'
+    window.electronAPI.cancelInstall()
+    return
+  }
+  mo2InstallRunning = true
+  btnInstallMo2.textContent = 'Cancel Install'
   installStatusMo2.textContent = 'Starting MO2 install…'
   window.electronAPI.removeInstallListeners()
 
@@ -621,6 +633,8 @@ function startModpackInstall() {
   })
 
   window.electronAPI.onInstallComplete(({ success, error, upToDate, warning, modsTotal }) => {
+    mo2InstallRunning = false
+    btnInstallMo2.textContent = 'Install Modpack via MO2'
     if (!success) {
       installStatusMo2.textContent = `Error: ${error}`
       return
