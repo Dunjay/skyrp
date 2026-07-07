@@ -99,9 +99,14 @@ router.get('/login-discord', (req, res) => {
   }
 
   // Register the state so we can distinguish "unknown" from "pending" in /status.
-  authStates.set(state, { status: 'pending', expiresAt: Date.now() + PENDING_TTL })
-  saveAuthStates()
-  console.log(`[skymp-compat] auth started (state ${state.slice(0, 8)}…)`)
+  // Never clobber a completed login that hasn't been delivered yet (e.g. the
+  // browser re-loading this URL via Back/history after authorising).
+  const existing = authStates.get(state)
+  if (!existing || existing.status === 'pending') {
+    authStates.set(state, { status: 'pending', expiresAt: Date.now() + PENDING_TTL })
+    saveAuthStates()
+    console.log(`[skymp-compat] auth started (state ${String(state).slice(0, 8)}…)`)
+  }
 
   const params = new URLSearchParams({
     client_id:     config.discordClientId,

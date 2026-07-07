@@ -395,7 +395,8 @@ ipcMain.handle('discord:login', async () => {
   // Poll the status endpoint until auth completes or times out (5 minutes).
   const POLL_INTERVAL_MS = 2000
   const deadline = Date.now() + 5 * 60 * 1000
-  let unexpectedStreak = 0   // consecutive non-401 poll failures
+  let unexpectedStreak = 0    // consecutive non-401 poll failures
+  let stateRegistered  = false // backend has answered 401 (= browser reached /login-discord)
 
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
@@ -406,8 +407,14 @@ ipcMain.handle('discord:login', async () => {
         `${config.apiUrl}/api/users/login-discord/status?state=${encodeURIComponent(state)}`
       )
     } catch (err) {
-      if (err.statusCode === 401) { unexpectedStreak = 0; continue }  // still pending - keep polling
-      if (err.statusCode === 403) return { success: false, error: 'Auth expired or unknown state - try again.' }
+      if (err.statusCode === 401) { stateRegistered = true; unexpectedStreak = 0; continue }  // still pending - keep polling
+      if (err.statusCode === 403) {
+        // The state only exists server-side once the browser loads the login
+        // URL. A 403 before we ever saw it pending just means the browser is
+        // still opening (cold start, open-link prompt) - keep waiting.
+        if (!stateRegistered) { unexpectedStreak = 0; continue }
+        return { success: false, error: 'Login attempt expired - please try again.' }
+      }
 
       // Anything else (cross-host redirect, 404 from a stale backend, 5xx,
       // network blip): keep polling briefly, but give up with the real reason
