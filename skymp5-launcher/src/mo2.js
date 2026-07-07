@@ -842,6 +842,46 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 4000, timeout
   })
 }
 
+// Creation Club quarantine (non-portable installs)
+
+// Real CC files follow the ccXXXsseNNN- naming (e.g. ccBGSSSE001-Fish.esm).
+// A bare cc* match would also catch community mods like CCOR.esp.
+const CC_FILE_RE = /^cc[a-z]{3}sse\d{3}-.*\.(?:es[mlp]|bsa)$/i
+// AE extras the engine force-loads without a plugins.txt entry.
+const CC_EXTRAS  = new Set(['_resourcepack.esl', '_resourcepack.bsa', 'marketplacetextures.bsa'])
+
+/**
+ * Move Creation Club plugins/archives (plus the AE resource pack and
+ * marketplace textures) out of <gamePath>/Data into "<gamePath>/disabled CC
+ * mods". Non-portable installs play from the user's real Skyrim folder, where
+ * the engine force-loads CC content via Skyrim.ccc regardless of plugins.txt
+ * and fights the server's load order. Files named in serverLoadOrder are left
+ * alone. Idempotent; returns the number of files moved.
+ */
+function disableCcContent(gamePath, serverLoadOrder) {
+  const dataDir = path.join(gamePath, 'Data')
+  const keep = new Set((serverLoadOrder || []).map(f => path.basename(f).toLowerCase()))
+  let names = []
+  try { names = fs.readdirSync(dataDir) } catch { return 0 }
+
+  const destDir = path.join(gamePath, 'disabled CC mods')
+  let moved = 0
+  for (const name of names) {
+    const l = name.toLowerCase()
+    if (!(CC_FILE_RE.test(l) || CC_EXTRAS.has(l))) continue
+    if (keep.has(l)) continue   // the server actually uses it - leave it alone
+    try {
+      fs.mkdirSync(lp(destDir), { recursive: true })
+      fs.renameSync(lp(path.join(dataDir, name)), lp(path.join(destDir, name)))
+      moved++
+    } catch (err) {
+      _log(`could not move ${name} to disabled CC mods: ${err.message}`)
+    }
+  }
+  if (moved > 0) _log(`moved ${moved} Creation Club file(s) to ${destDir}`)
+  return moved
+}
+
 // Launch
 
 /** Launch the game through MO2's VFS using the SKSE executable entry. */
@@ -903,6 +943,7 @@ module.exports = {
   installRootArchive,
   enforceModRules,
   waitForDownloads,
+  disableCcContent,
   launchGame,
   openUI,
   getStatus,

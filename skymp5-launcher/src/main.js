@@ -198,14 +198,18 @@ ipcMain.handle('graphics:load', () => {
     const grass = data['Grass'] || {}
     const controls = data['Controls'] || {}
     const full = String(disp['bFull Screen'] || '0') === '1'
-    const borderless = String(disp['bBorderless'] || '0') === '1'
+    // Default to borderless 1080p when the ini doesn't say otherwise (missing
+    // file or keys) - matches the server's forced first-install defaults. An
+    // explicit bFull Screen=0 + bBorderless=0 still reads as windowed.
+    const hasMode = ('bFull Screen' in disp) || ('bBorderless' in disp)
+    const borderless = hasMode ? String(disp['bBorderless'] || '0') === '1' : true
     return {
       ok: true,
       path: p,
       exists: fs.existsSync(p),
       windowMode: full ? 'fullscreen' : (borderless ? 'borderless' : 'windowed'),
-      width:  disp['iSize W'] || '',
-      height: disp['iSize H'] || '',
+      width:  disp['iSize W'] || '1920',
+      height: disp['iSize H'] || '1080',
       invertY: String(controls['bInvertYValues'] || '0') === '1',
       fades: {
         actor:  disp['fLODFadeOutMultActors']  || '',
@@ -981,6 +985,14 @@ async function prepareForLaunch(skyrimPath, viaMO2) {
     try { serverInfo = await fetchJSON(`${config.apiUrl}/api/serverinfo`) } catch {}
   }
 
+  // Non-portable installs play from the user's real Skyrim folder: quarantine
+  // Creation Club content the server doesn't use into "disabled CC mods", or
+  // the engine force-loads it via Skyrim.ccc and fights the server load order.
+  // The isolated game copy never receives cc* files, so this is a no-op there.
+  if (skyrimPath === store.get('skyrimPath')) {
+    mo2.disableCcContent(skyrimPath, serverInfo?.loadOrder)
+  }
+
   // Staging gate: surface everything missing before we write settings or launch
   const notReady = verifyLaunchReadiness(skyrimPath, viaMO2, serverInfo)
   if (notReady.length > 0) {
@@ -1385,6 +1397,13 @@ async function acquireNexusArchive(modId, fileId, displayName, { downloadsDir, a
   // is picked up immediately. The name is a hint (mod id or name words);
   // `expect` does the real gating by archive contents.
   const namePattern = nexusNamePattern(modId, displayName)
+
+  // Already staged from a previous run? Check quietly first so the browser
+  // page and folder don't open when there is nothing left to download.
+  try {
+    const [pre] = await mo2.waitForDownloads([{ name: displayName, namePattern, expect }], null, undefined, 250, 1500)
+    if (pre) return pre
+  } catch { /* not staged yet - run the full browser flow below */ }
 
   openDownloadList(downloadsDir)
   send('install:progress', { phase: 'mods', file: `Find ${displayName} on the downloads list, click "Slow Download", and move the archive into the SkyRP downloads folder`, index: 0, total: 1, skipped: false })
