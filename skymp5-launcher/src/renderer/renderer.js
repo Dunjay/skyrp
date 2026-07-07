@@ -431,6 +431,7 @@ const isolatedText      = document.getElementById('isolated-status-text')
 const fieldIsolated     = document.getElementById('setting-isolated-game')
 const btnCreateIsolated = document.getElementById('btn-create-isolated')
 const btnInstallMo2     = document.getElementById('btn-install-mo2')
+const isolatedGroup     = document.getElementById('isolated-install-group')
 
 // locks install via mo2 until there's a game to manage
 function refreshDownloadModsState(st) {
@@ -443,6 +444,9 @@ function refreshDownloadModsState(st) {
 
 async function refreshIsolatedStatus() {
   const st = await window.electronAPI.isolatedStatus()
+  // Portable mode off: the whole "choose install location" section is
+  // irrelevant, so hide it instead of explaining it.
+  isolatedGroup.hidden = !fieldIsolated.checked
   if (!st.ready) {
     isolatedDot.className    = 'vortex-status-dot'
     isolatedText.textContent = 'Not installed yet - choose a location to set up SkyRP'

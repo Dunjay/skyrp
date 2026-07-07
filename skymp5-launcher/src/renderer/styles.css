@@ -746,6 +746,8 @@ html, body {
   margin-bottom: 18px;
 }
 
+.settings-group[hidden] { display: none; }
+
 .setting-label {
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 10px;
