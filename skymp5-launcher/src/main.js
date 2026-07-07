@@ -290,17 +290,20 @@ ipcMain.handle('hotkeys:save', (_e, h) => {
 // The server ships a couple of required defaults. We apply them once, when the
 // SkyRP install is first set up, so later tweaks in the Settings tab aren't
 // reverted on every client update:
-//   • 1080p borderless window → MO2 profile's SkyrimPrefs.ini [Display]
-//   • Wait key (T) unbound     → controlmap override (waiting is disabled here)
+//   • borderless window mode → MO2 profile's SkyrimPrefs.ini [Display]
+//     (resolution is player-owned: it comes from the seeded ini, or the
+//      Settings tab default when the ini doesn't specify one)
+//   • Wait key (T) unbound   → controlmap override (waiting is disabled here)
 function applyForcedServerDefaults(gamePath) {
-  // Graphics: force 1920x1080 borderless. ini.write preserves every other key.
+  // Graphics: force borderless window mode. ini.write preserves every other
+  // key, including whatever resolution the player's ini carries.
   if (!store.get('forcedDefaultsApplied')) {
     try {
       ini.write(skyrimPrefsPath(), {
-        Display: { 'bFull Screen': '0', 'bBorderless': '1', 'iSize W': '1920', 'iSize H': '1080' },
+        Display: { 'bFull Screen': '0', 'bBorderless': '1' },
       })
       store.set('forcedDefaultsApplied', true)
-      log('[defaults] forced 1080p borderless into SkyrimPrefs.ini')
+      log('[defaults] forced borderless window mode into SkyrimPrefs.ini')
     } catch (err) {
       log('[defaults] could not write graphics defaults:', err.message)
     }
@@ -542,6 +545,10 @@ ipcMain.handle('game:createIsolated', async () => {
     return { success: false, error: 'Set a valid Skyrim path first (SkyrimSE.exe not found).' }
   }
 
+  if (!findOriginalPrefsIni()) {
+    return { success: false, error: NEVER_LAUNCHED_ERROR }
+  }
+
   // No clean-install check needed: copyGameDir copies only vanilla files, so a modded source is fine.
 
   // Ask where to install the modlist.
@@ -686,19 +693,51 @@ async function copyGameDir(src, dst) {
   return { success: true, copied }
 }
 
-// Seed the MO2 profile SkyrimPrefs.ini from the player's prefs; forced 1080p/borderless merges on top later.
+// First-launch sanity check
+// The game writes its My Games inis (and registry entries) the first time
+// vanilla Skyrim reaches the main menu. Installing MO2 before that leaves the
+// profile with unconfigured defaults and the engine unregistered, which
+// breaks in confusing ways - so installs are blocked until the ini exists.
+// Folder name varies by store edition, mirroring pluginsTxtDirs().
+const MYGAMES_VARIANTS = [
+  'Skyrim Special Edition',
+  'Skyrim Special Edition GOG',
+  'Skyrim Special Edition EPIC',
+  'Skyrim Special Edition MS',
+]
+
+function findOriginalPrefsIni() {
+  const docs = app.getPath('documents')
+  for (const v of MYGAMES_VARIANTS) {
+    const p = path.join(docs, 'My Games', v, 'SkyrimPrefs.ini')
+    if (fs.existsSync(p)) return p
+  }
+  return null
+}
+
+const NEVER_LAUNCHED_ERROR =
+  'Skyrim has never been launched on this PC (no SkyrimPrefs.ini in Documents\\My Games). ' +
+  'Start the game once the normal way (Steam/GOG), reach the main menu, quit, then run this install again.'
+
+// Seed the MO2 profile SkyrimPrefs.ini from the player's own prefs, then
+// rewrite the server's forced window mode (borderless) on top. Resolution is
+// deliberately NOT rewritten: it stays whatever the player's ini says, and
+// the Settings tab only shows 1080p as a fallback when the ini has none.
 function seedProfilePrefs(skyrimPath) {
   const dest = path.join(mo2.getProfileDir(), 'skyrimprefs.ini')
   if (fs.existsSync(dest)) return
   const candidates = [
     path.join(skyrimPath, 'Skyrim', 'SkyrimPrefs.ini'),
-    path.join(app.getPath('documents'), 'My Games', 'Skyrim Special Edition', 'SkyrimPrefs.ini'),
-  ]
+    findOriginalPrefsIni(),
+  ].filter(Boolean)
   for (const from of candidates) {
     if (!fs.existsSync(from)) continue
     try {
       fs.mkdirSync(path.dirname(dest), { recursive: true })
       fs.copyFileSync(from, dest)
+      ini.write(dest, {
+        Display: { 'bFull Screen': '0', 'bBorderless': '1' },
+      })
       log(`[isolated] seeded profile SkyrimPrefs.ini from ${from}`)
     } catch (err) {
       log(`[isolated] could not seed SkyrimPrefs.ini: ${err.message}`)
@@ -1432,6 +1471,8 @@ async function runMO2Install() {
   const srv = activeServer()
   if (!srv) return fail('No server selected - open Settings and choose a server.')
 
+  if (!findOriginalPrefsIni()) return fail(NEVER_LAUNCHED_ERROR)
+
   try {
     // 1. MO2 itself, the portable instance, and the nxm:// handler
     await mo2.ensureInstalled(msg =>
@@ -1441,6 +1482,7 @@ async function runMO2Install() {
     try { serverInfo = await fetchJSON(`${config.apiUrl}/api/serverinfo`) } catch {}
     mo2.ensureInstance(skyrimPath, serverInfo?.loadOrder)
     mo2.registerNxmHandler()
+    seedProfilePrefs(store.get('skyrimPath') || skyrimPath)
     applyForcedServerDefaults(skyrimPath)
 
     // 2. SkyMP client files into the real Data/
