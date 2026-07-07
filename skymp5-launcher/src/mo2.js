@@ -757,6 +757,17 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 4000, timeout
   let mismatched = []           // settled files that look like a wanted mod but fail verification
   let progressed = false        // a file appeared/grew or an item resolved since the last tick
 
+  // Per-candidate rejection log (dev log only). One line per item+file+reason,
+  // re-emitted only when the reason changes, so a stuck wait explains itself
+  // instead of ignoring files silently.
+  const lastReason = new Map()  // `${i}:${full}` -> reason
+  const why = (i, a, reason) => {
+    const key = `${i}:${a.full}`
+    if (lastReason.get(key) === reason) return
+    lastReason.set(key, reason)
+    _log(`[wait] "${wanted[i].name}" vs "${a.file}": ${reason}`)
+  }
+
   const scan = async () => {
     const archives = listDownloadArchives()
     const settled  = a => prevSize.get(a.full) === a.st.size
@@ -767,30 +778,35 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 4000, timeout
       const w = wanted[i]
       for (const a of archives) {
         if (w.hash) {
-          if (!settled(a)) continue                            // still being copied; retry once stable
+          if (!settled(a)) { why(i, a, 'size still changing - copy in progress'); continue }
           const nameHit = w.namePattern && w.namePattern.test(a.file)
           if (typeof w.size === 'number' && w.size > 0 && a.st.size !== w.size) {
+            why(i, a, `size mismatch (want ${w.size}, file is ${a.st.size})${nameHit ? ' - name matches, so likely a different version' : ''}`)
             if (nameHit) suspect.push(a)
             continue
           }
           try {
             if (await hashCached(a.full, a.st) !== String(w.hash).toLowerCase()) {
+              why(i, a, `sha256 mismatch${nameHit ? ' - name matches, so likely a different version' : ''}`)
               if (nameHit) suspect.push(a)
               continue
             }
-          } catch { continue }                                 // unreadable now; retry next tick
+          } catch { why(i, a, 'unreadable right now (locked?)'); continue }   // retry next tick
         } else if (w.namePattern) {
           if (consumed.has(a.full)) continue
-          if (!w.namePattern.test(a.file)) continue
+          if (!w.namePattern.test(a.file)) { why(i, a, `filename does not match ${w.namePattern}`); continue }
           const listing = await listArchiveContents(a.full, a.st)   // null while locked or incomplete
-          if (listing == null) continue
-          if ([].concat(w.expect || []).some(re => !re.test(listing))) {   // right mod, wrong file (e.g. Part 1 vs 2)
+          if (listing == null) { why(i, a, '7za could not list the archive (locked, incomplete, or not an archive)'); continue }
+          const missing = [].concat(w.expect || []).filter(re => !re.test(listing))
+          if (missing.length > 0) {   // right mod, wrong file (e.g. Part 1 vs 2)
+            why(i, a, `archive lacks expected content: ${missing.map(re => re.source).join(', ')}`)
             if (settled(a)) suspect.push(a)
             continue
           }
         } else {
           continue
         }
+        _log(`[wait] "${w.name}" matched by "${a.file}"`)
         found[i] = a.full
         consumed.add(a.full)
         progressed = true
