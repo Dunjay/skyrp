@@ -198,18 +198,24 @@ ipcMain.handle('graphics:load', () => {
     const grass = data['Grass'] || {}
     const controls = data['Controls'] || {}
     const full = String(disp['bFull Screen'] || '0') === '1'
-    // Default to borderless 1080p when the ini doesn't say otherwise (missing
-    // file or keys) - matches the server's forced first-install defaults. An
-    // explicit bFull Screen=0 + bBorderless=0 still reads as windowed.
+    // Default to borderless when the ini doesn't say otherwise (missing file
+    // or keys). An explicit bFull Screen=0 + bBorderless=0 reads as windowed.
     const hasMode = ('bFull Screen' in disp) || ('bBorderless' in disp)
     const borderless = hasMode ? String(disp['bBorderless'] || '0') === '1' : true
+    // Resolution fallback chain: profile ini, then the player's original
+    // My Games ini, then 1080p.
+    let orig = {}
+    try {
+      const src = findOriginalPrefsIni()
+      if (src) orig = ini.read(src)['Display'] || {}
+    } catch { /* fall through to 1080p */ }
     return {
       ok: true,
       path: p,
       exists: fs.existsSync(p),
       windowMode: full ? 'fullscreen' : (borderless ? 'borderless' : 'windowed'),
-      width:  disp['iSize W'] || '1920',
-      height: disp['iSize H'] || '1080',
+      width:  disp['iSize W'] || orig['iSize W'] || '1920',
+      height: disp['iSize H'] || orig['iSize H'] || '1080',
       invertY: String(controls['bInvertYValues'] || '0') === '1',
       fades: {
         actor:  disp['fLODFadeOutMultActors']  || '',
@@ -295,6 +301,27 @@ ipcMain.handle('hotkeys:save', (_e, h) => {
 //      Settings tab default when the ini doesn't specify one)
 //   • Wait key (T) unbound   → controlmap override (waiting is disabled here)
 function applyForcedServerDefaults(gamePath) {
+  // One-time repair for profiles created before resolution became
+  // player-owned: earlier builds force-stamped 1920x1080 into the profile
+  // ini, hiding the player's real resolution. Re-import it once from the
+  // original My Games ini; from then on the Settings tab owns the values.
+  if (!store.get('resolutionMigrated')) {
+    try {
+      const src  = findOriginalPrefsIni()
+      const prof = skyrimPrefsPath()
+      if (src && fs.existsSync(prof)) {
+        const orig = ini.read(src)['Display'] || {}
+        if (orig['iSize W'] && orig['iSize H']) {
+          ini.write(prof, { Display: { 'iSize W': String(orig['iSize W']), 'iSize H': String(orig['iSize H']) } })
+          log(`[defaults] re-imported resolution ${orig['iSize W']}x${orig['iSize H']} from the original ini`)
+        }
+      }
+      store.set('resolutionMigrated', true)
+    } catch (err) {
+      log('[defaults] resolution migration failed:', err.message)
+    }
+  }
+
   // Graphics: force borderless window mode. ini.write preserves every other
   // key, including whatever resolution the player's ini carries.
   if (!store.get('forcedDefaultsApplied')) {
@@ -1556,9 +1583,15 @@ async function runMO2Install() {
       !fs.existsSync(modFolderPath(m)) ||
       !m.hash ||                                   // pre-hash manifest: be safe, reinstall
       mo2.readModHash(m.name) !== m.hash
-    const rootSetUp      = fs.existsSync(path.join(skyrimPath, 'skse64_loader.exe'))
+    // Root is only "set up" when the preloader dll is physically next to the
+    // exe - the stored hash flag alone can desync from disk (deleted files,
+    // a wiped game copy) and used to silently skip the Engine Fixes step.
+    const PRELOADER_DLLS = ['d3dx9_42.dll', 'winhttp.dll']
+    const preloaderPresent = PRELOADER_DLLS.some(f => fs.existsSync(path.join(skyrimPath, f)))
+    const rootSetUp      = fs.existsSync(path.join(skyrimPath, 'skse64_loader.exe')) && preloaderPresent
     const rootChanged    = (store.get('installedRootHash') || '') !== (manifest.rootHash || '')
     const needsRoot      = !rootSetUp || rootChanged
+    log(`[mo2-install] root check: skse=${fs.existsSync(path.join(skyrimPath, 'skse64_loader.exe'))} preloader=${preloaderPresent} hashChanged=${rootChanged} -> needsRoot=${needsRoot}`)
     const modsToInstall  = manifest.mods.filter(modChanged)
 
     const finishOrder = () => {
@@ -1734,6 +1767,11 @@ async function runMO2Install() {
           if (!efPath) return fail('The Engine Fixes skse64 Preloader (formerly "Part 2") was not downloaded. Get it from the downloads list ("Slow Download") and move the archive into the SkyRP downloads folder.')
           send('install:progress', { phase: 'mods', file: 'Installing Engine Fixes…', index: 0, total: 0, skipped: false })
           mo2.installRootArchive(efPath, skyrimPath)
+          // Trust nothing: confirm the preloader is actually next to the exe,
+          // or the game will error about Engine Fixes after launch.
+          if (!PRELOADER_DLLS.some(f => fs.existsSync(path.join(skyrimPath, f)))) {
+            return fail(`Engine Fixes was extracted from "${path.basename(efPath)}" but no preloader dll (d3dx9_42.dll / winhttp.dll) ended up next to SkyrimSE.exe. The archive layout is unexpected - check %TEMP%\\skyrp-install.log.`)
+          }
         } catch (err) {
           return fail(`Engine Fixes install failed: ${err.message}`)
         }
