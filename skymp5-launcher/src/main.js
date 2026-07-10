@@ -927,11 +927,7 @@ const REQUIRED_FILES = [
   path.join('Data', 'SKSE', 'Plugins', 'MpClientPlugin.dll'),
 ]
 
-// The Engine Fixes preloader ships inside the client files zip and must sit
-// next to SkyrimSE.exe, or the game errors after launch. Either proxy name
-// counts, so it can't live in REQUIRED_FILES (an every() list). A missing
-// dll (antivirus quarantine is a classic) flips the update check, and the
-// zip re-extract puts it back.
+// Engine fixes preloader
 const PRELOADER_DLLS = ['d3dx9_42.dll', 'winhttp.dll']
 const preloaderPresent = (gamePath) =>
   !!gamePath && PRELOADER_DLLS.some(f => fs.existsSync(path.join(gamePath, f)))
@@ -1048,16 +1044,12 @@ function verifyLaunchReadiness(skyrimPath, viaMO2, serverInfo) {
     }
   }
 
-  // A modpack install that never finished leaves the game missing components
-  // (SKSE payload, manifest root files) that the required-files check cannot
-  // see - the game then launches and errors on its own.
+  // Fallback if install fails
   if (viaMO2 && store.get('modpackState') === 'failed') {
     problems.push('The last modpack install did not finish. Press PLAY (it will show UPDATE) or run "Install Modpack" to complete it first.')
   }
 
-  // The preloader arrives via the client files zip; if it has gone missing
-  // (antivirus quarantine is a classic), block the launch - the game would
-  // start and then error about Engine Fixes on its own.
+  // Fallback for engine fixes failure (like with AV software)
   if (!preloaderPresent(skyrimPath)) {
     problems.push('The Engine Fixes preloader dll is missing from the game folder; press PLAY (it will show UPDATE) to reinstall the client files.')
   }
@@ -1405,9 +1397,6 @@ async function installClientFilesCore(skyrimPath, srv, serverInfo) {
     log(`[install] extracted ${extracted} files`)
     ensureClientDirs(skyrimPath)
 
-    // The preloader is expected to ship inside this zip. Fail loudly if the
-    // server's package doesn't include it - otherwise every install reports
-    // success and the game errors about Engine Fixes at runtime.
     if (!preloaderPresent(skyrimPath)) {
       return {
         success: false,
@@ -1709,11 +1698,6 @@ async function runMO2Install() {
       } catch (err) {
         return fail(`SKSE install failed: ${err.message}`)
       }
-
-      // The Engine Fixes preloader is no longer a launcher-managed root mod:
-      // it ships inside the client files zip (hash-tracked and force-updated
-      // by the version check), so SKSE and MO2 are the only components the
-      // launcher installs itself.
     }
 
     // 5. Match MO2 priority + plugin order, record the installed version
