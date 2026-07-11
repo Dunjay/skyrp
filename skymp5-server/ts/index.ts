@@ -31,6 +31,7 @@ import * as path from "path";
 import * as os from "os";
 
 import * as manifestGen from "./manifestGen";
+import { attachBackendFactionApi } from "./backendFactionApi";
 import { createScampServer } from "./scampNative";
 import { MetricsSystem, tickDurationHistogram, tickDurationSummary } from "./systems/metricsSystem";
 
@@ -307,6 +308,14 @@ const main = async () => {
     console.error(e);
     console.error(`Stopping the server due to the previous error`);
     process.exit(-1);
+  }
+
+  // The gamemode probes mp.assignBackendFaction etc, so attach before it loads.
+  // A failed attach must degrade to "natives unavailable", never block gamemode load.
+  try {
+    attachBackendFactionApi(server, settingsObject);
+  } catch (e) {
+    console.error("attachBackendFactionApi failed, faction sync natives unavailable:", e);
   }
 
   setupGamemode(server, gamemodePath);

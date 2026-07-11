@@ -36,15 +36,15 @@ export class Login implements System {
 
   private getFetchOptions(callerFunctionName: string) {
     return {
-      // retry on any network error, or 5xx status codes
+      // Retry on network errors or 5xx, capped at 10 attempts. The cap must live in
+      // the callback: fetch-retry ignores 'retries' when retryOn is a function.
       retryOn: (attempt: number, error: Error | null, response: Response) => {
-        const retry = error !== null || response.status >= 500;
+        const retry = attempt < 10 && (error !== null || response.status >= 500);
         if (retry) {
-          console.log(`${callerFunctionName}: retrying request ${JSON.stringify({ attempt, error, status: response.status })}`);
+          console.log(`${callerFunctionName}: retrying request ${JSON.stringify({ attempt, error: error && error.message, status: response ? response.status : null })}`);
         }
         return retry;
-      },
-      retries: 10
+      }
     };
   }
 

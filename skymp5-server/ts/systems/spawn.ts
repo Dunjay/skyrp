@@ -1,22 +1,12 @@
 import { Settings } from "../settings";
 import { System, Log, SystemContext, Content } from "./system";
+import { filterAccessForSlot } from "../backendFactionApi";
 
 type Mp = any;
 
 function randomInteger(min: number, max: number) {
   const rand = min + Math.random() * (max + 1 - min);
   return Math.floor(rand);
-}
-
-// Per-character factions
-function filterAccessForSlot(access: any, slot: number): any {
-  if (!access || !Array.isArray(access.gameFactions)) return access;
-  return {
-    ...access,
-    gameFactions: access.gameFactions.filter(
-      (gf: any) => gf && (gf.slot === null || gf.slot === undefined || gf.slot === slot)
-    ),
-  };
 }
 
 const MAX_CHARACTERS = 3;
@@ -289,6 +279,8 @@ export class Spawn implements System {
       filterAccessForSlot(auth.access, slot));
 
     ctx.gm.emit("userAssignActor", userId, actorId);
+    // Gamemode store re-sync: re-runs its connect chain when a switch assigns a new body
+    (ctx.svr as any).onUserAssignActor?.(userId, actorId);
 
     this.lastAssignMs.set(userId, Date.now());
     this.pending.delete(userId);
@@ -336,5 +328,7 @@ export class Spawn implements System {
     this.applyAuthProps(mp, actorId, userProfileId, discordRoleIds, discordId, access);
 
     ctx.gm.emit("userAssignActor", userId, actorId);
+    // Gamemode store re-sync: re-runs its connect chain when a switch assigns a new body
+    (ctx.svr as any).onUserAssignActor?.(userId, actorId);
   }
 }
